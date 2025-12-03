@@ -258,7 +258,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addActivity = async (activity: Omit<Activity, 'id' | 'time'>) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar atividades');
+            return;
+        }
         const newActivity: Activity = {
             ...activity,
             id: Date.now().toString(),
@@ -267,12 +271,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
         setActivities(prev => [newActivity, ...prev]);
         if (supabase) {
-            await supabase.from('activities').insert([newActivity]);
+            try {
+                const { error } = await supabase.from('activities').insert([newActivity]);
+                if (error) {
+                    console.error('❌ Erro ao salvar atividade no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    // Reverter mudança local
+                    setActivities(prev => prev.filter(a => a.id !== newActivity.id));
+                } else {
+                    console.log('✅ Atividade salva com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar atividade');
+                setActivities(prev => prev.filter(a => a.id !== newActivity.id));
+            }
         }
     };
 
     const addInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar itens');
+            return;
+        }
         const newItem: InventoryItem = {
             ...item,
             id: Date.now().toString(),
@@ -280,44 +302,125 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
         setInventoryItems(prev => [...prev, newItem]);
         if (supabase) {
-            await supabase.from('inventory_items').insert([newItem]);
+            try {
+                const { error } = await supabase.from('inventory_items').insert([newItem]);
+                if (error) {
+                    console.error('❌ Erro ao salvar item no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    setInventoryItems(prev => prev.filter(i => i.id !== newItem.id));
+                } else {
+                    console.log('✅ Item salvo com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar item');
+                setInventoryItems(prev => prev.filter(i => i.id !== newItem.id));
+            }
         }
     };
 
     const addMachine = async (machine: Machine) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar máquinas');
+            return;
+        }
         const machineWithFarm = { ...machine, farm_id: currentUser.farm_id };
         setMachines(prev => [...prev, machineWithFarm]);
         if (supabase) {
-            await supabase.from('machines').insert([machineWithFarm]);
+            try {
+                const { error } = await supabase.from('machines').insert([machineWithFarm]);
+                if (error) {
+                    console.error('❌ Erro ao salvar máquina no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    setMachines(prev => prev.filter(m => m.id !== machine.id));
+                } else {
+                    console.log('✅ Máquina salva com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar máquina');
+                setMachines(prev => prev.filter(m => m.id !== machine.id));
+            }
         }
     };
 
     const addLivestock = async (animal: Livestock) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar animais');
+            return;
+        }
         const animalWithFarm = { ...animal, farm_id: currentUser.farm_id };
         setLivestock(prev => [...prev, animalWithFarm]);
         if (supabase) {
-            await supabase.from('livestock').insert([animalWithFarm]);
+            try {
+                const { error } = await supabase.from('livestock').insert([animalWithFarm]);
+                if (error) {
+                    console.error('❌ Erro ao salvar animal no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    setLivestock(prev => prev.filter(l => l.id !== animal.id));
+                } else {
+                    console.log('✅ Animal salvo com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar animal');
+                setLivestock(prev => prev.filter(l => l.id !== animal.id));
+            }
         }
     };
 
     const addTeamMember = async (member: TeamMember) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar membros');
+            return;
+        }
         const memberWithFarm = { ...member, farm_id: currentUser.farm_id };
         setTeamMembers(prev => [...prev, memberWithFarm]);
         if (supabase) {
-            await supabase.from('team_members').insert([memberWithFarm]);
+            try {
+                const { error } = await supabase.from('team_members').insert([memberWithFarm]);
+                if (error) {
+                    console.error('❌ Erro ao salvar membro no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    setTeamMembers(prev => prev.filter(t => t.id !== member.id));
+                } else {
+                    console.log('✅ Membro salvo com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar membro');
+                setTeamMembers(prev => prev.filter(t => t.id !== member.id));
+            }
         }
     };
 
     const addCrop = async (crop: Crop) => {
-        if (!currentUser.farm_id) return;
+        if (!currentUser.farm_id) {
+            console.error('❌ Erro: farm_id não encontrado');
+            alert('Erro: Você precisa estar logado para adicionar safras');
+            return;
+        }
         const cropWithFarm = { ...crop, farm_id: currentUser.farm_id };
         const updatedCrop = calculateCropStatus(cropWithFarm);
         setCrops(prev => [...prev, updatedCrop]);
         if (supabase) {
-            await supabase.from('crops').insert([updatedCrop]);
+            try {
+                const { error } = await supabase.from('crops').insert([updatedCrop]);
+                if (error) {
+                    console.error('❌ Erro ao salvar safra no Supabase:', error);
+                    alert(`Erro ao salvar: ${error.message}`);
+                    setCrops(prev => prev.filter(c => c.id !== updatedCrop.id));
+                } else {
+                    console.log('✅ Safra salva com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+                alert('Erro inesperado ao salvar safra');
+                setCrops(prev => prev.filter(c => c.id !== updatedCrop.id));
+            }
         }
     };
 

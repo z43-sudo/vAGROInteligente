@@ -1,17 +1,47 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Sprout, Calendar, Tractor, Beef,
-  Truck, Package, DollarSign, CloudRain, Users, Settings, Leaf, BarChart3, X, MessageSquare, LogOut, Newspaper
+  Truck, Package, DollarSign, CloudRain, Users, Settings, Leaf, BarChart3, X, MessageSquare, LogOut, Newspaper, Shield
 } from 'lucide-react';
 import { NavigationItem } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabaseClient';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { isMobileMenuOpen, closeMobileMenu, crops } = useApp();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Verificar se o usuário é admin
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      if (!user?.email) {
+        setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('email', user.email)
+          .single();
+
+        if (data && !error) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminAccess();
+  }, [user]);
 
   const navigation: NavigationItem[] = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -27,6 +57,7 @@ const Sidebar: React.FC = () => {
     { name: 'Gestor', path: '/gestor', icon: BarChart3 },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
     { name: 'Notícias', path: '/noticias', icon: Newspaper },
+    ...(isAdmin ? [{ name: 'Admin', path: '/admin', icon: Shield }] : []),
   ];
 
   return (

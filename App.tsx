@@ -28,6 +28,7 @@ import AddMachine from './pages/AddMachine';
 import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import News from './pages/News';
+import AdminPanel from './pages/AdminPanel';
 
 function App() {
   return (
@@ -189,6 +190,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <News />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <Layout>
+                  <AdminPanel />
                 </Layout>
               </ProtectedRoute>
             } />

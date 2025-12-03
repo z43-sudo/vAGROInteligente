@@ -136,3 +136,26 @@ export interface Message {
   farm_id: string;
   created_at: string;
 }
+
+export interface UserProfile {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  farm_id: string;
+  role: 'owner' | 'member';
+  subscription_plan: 'free' | 'basic' | 'professional' | 'enterprise';
+  subscription_status: 'active' | 'inactive' | 'suspended' | 'trial';
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: 'root' | 'admin' | 'support';
+  created_at: string;
+  updated_at: string;
+}

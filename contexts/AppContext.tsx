@@ -97,14 +97,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return saved === 'true';
     });
 
-    const [farmDetails, setFarmDetails] = useState(() => {
-        const saved = localStorage.getItem('farmDetails');
-        return saved ? JSON.parse(saved) : {
-            name: 'Carregando...',
-            cnpj: '',
-            address: '',
-            coordinates: ''
-        };
+    const [farmDetails, setFarmDetails] = useState({
+        name: 'Carregando...',
+        cnpj: '',
+        address: '',
+        coordinates: ''
     });
 
     useEffect(() => {
@@ -123,7 +120,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateFarmDetails = (details: Partial<typeof farmDetails>) => {
         setFarmDetails(prev => {
             const newDetails = { ...prev, ...details };
-            localStorage.setItem('farmDetails', JSON.stringify(newDetails));
+            // Salvar com chave específica do usuário
+            if (currentUser.farm_id) {
+                const storageKey = `farmDetails_${currentUser.farm_id}`;
+                localStorage.setItem(storageKey, JSON.stringify(newDetails));
+            }
             return newDetails;
         });
     };
@@ -224,6 +225,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 farm_id: farmId,
                 role: user.user_metadata?.role || 'Proprietário'
             }));
+
+            // Carregar dados específicos deste usuário do localStorage
+            const storageKey = `farmDetails_${farmId}`;
+            const savedFarmDetails = localStorage.getItem(storageKey);
+            if (savedFarmDetails) {
+                setFarmDetails(JSON.parse(savedFarmDetails));
+            } else {
+                // Se não tiver dados salvos, usar nome do usuário como padrão
+                setFarmDetails({
+                    name: user.user_metadata?.full_name || 'Minha Fazenda',
+                    cnpj: '',
+                    address: '',
+                    coordinates: ''
+                });
+            }
         }
     };
 

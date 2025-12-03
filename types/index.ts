@@ -19,6 +19,7 @@ export interface Crop {
   status: 'active' | 'completed';
   startDate?: string;
   cycleDuration?: number;
+  farm_id?: string;
 }
 
 export interface Machine {
@@ -28,6 +29,7 @@ export interface Machine {
   status: 'Operando' | 'Manutenção' | 'Parado';
   hours: number;
   location: string;
+  farm_id?: string;
 }
 
 export interface Activity {
@@ -37,6 +39,7 @@ export interface Activity {
   status: 'Em andamento' | 'Concluído' | 'Urgente' | 'Agendado';
   time: string;
   type: 'irrigation' | 'maintenance' | 'alert' | 'harvest';
+  farm_id?: string;
 }
 
 export interface NavigationItem {
@@ -56,6 +59,7 @@ export interface Livestock {
   status: 'Saudável' | 'Doente' | 'Tratamento' | 'Vendido';
   location: string;
   lastVaccination: string;
+  farm_id?: string;
 }
 
 export interface LogisticsVehicle {
@@ -78,6 +82,7 @@ export interface InventoryItem {
   location: string;
   lastRestock: string;
   status: 'Normal' | 'Baixo' | 'Crítico';
+  farm_id?: string;
 }
 
 export interface WeatherData {
@@ -102,6 +107,7 @@ export interface TeamMember {
   status: 'Ativo' | 'Inativo';
   avatar?: string;
   department: string;
+  farm_id?: string;
 }
 
 export interface Notification {

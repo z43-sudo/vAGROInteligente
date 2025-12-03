@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Activity, Machine, InventoryItem, Livestock, TeamMember, Crop } from '../types';
+import { Activity, Machine, InventoryItem, Livestock, TeamMember, Crop, Notification } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface UserProfile {
@@ -33,8 +33,11 @@ interface AppContextType {
         name: string;
         cnpj: string;
         address: string;
+        coordinates?: string;
     };
-    updateFarmDetails: (details: { name?: string; cnpj?: string; address?: string }) => void;
+    updateFarmDetails: (details: { name?: string; cnpj?: string; address?: string; coordinates?: string }) => void;
+    notifications: Notification[];
+    markAllNotificationsAsRead: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -78,6 +81,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [livestock, setLivestock] = useState<Livestock[]>([]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [crops, setCrops] = useState<Crop[]>([]);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
 
     const [currentUser, setCurrentUser] = useState<UserProfile>({
         name: 'Gestor',
@@ -96,7 +100,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return saved ? JSON.parse(saved) : {
             name: 'Agro Inteligente',
             cnpj: '00.000.000/0001-00',
-            address: 'Rodovia BR-163, Km 700'
+            address: 'Rodovia BR-163, Km 700',
+            coordinates: '-13.422328, -49.147004' // Localização Exata Padrão
         };
     });
 
@@ -119,6 +124,77 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('farmDetails', JSON.stringify(newDetails));
             return newDetails;
         });
+    };
+
+    // Intelligent Notifications Logic
+    useEffect(() => {
+        const generateNotifications = () => {
+            const newNotifications: Notification[] = [];
+
+            // 1. Inventory Alerts
+            inventoryItems.forEach(item => {
+                if (item.quantity <= item.minQuantity) {
+                    newNotifications.push({
+                        id: `inv-${item.id}`,
+                        title: 'Estoque Baixo',
+                        message: `O item ${item.name} está abaixo do nível mínimo (${item.quantity} ${item.unit}).`,
+                        type: item.quantity === 0 ? 'error' : 'warning',
+                        timestamp: 'Agora',
+                        read: false
+                    });
+                }
+            });
+
+            // 2. Machine Maintenance Alerts
+            machines.forEach(machine => {
+                if (machine.status === 'Manutenção') {
+                    newNotifications.push({
+                        id: `mac-${machine.id}`,
+                        title: 'Máquina em Manutenção',
+                        message: `${machine.name} está em manutenção.`,
+                        type: 'warning',
+                        timestamp: 'Agora',
+                        read: false
+                    });
+                }
+            });
+
+            // 3. Livestock Health Alerts
+            livestock.forEach(animal => {
+                if (animal.status === 'Doente' || animal.status === 'Tratamento') {
+                    newNotifications.push({
+                        id: `ani-${animal.id}`,
+                        title: 'Alerta Sanitário',
+                        message: `Animal ${animal.tag} (${animal.type}) está ${animal.status.toLowerCase()}.`,
+                        type: 'error',
+                        timestamp: 'Agora',
+                        read: false
+                    });
+                }
+            });
+
+            // 4. Urgent Activities
+            activities.forEach(activity => {
+                if (activity.status === 'Urgente') {
+                    newNotifications.push({
+                        id: `act-${activity.id}`,
+                        title: 'Atividade Urgente',
+                        message: `${activity.title}: ${activity.description}`,
+                        type: 'warning',
+                        timestamp: activity.time,
+                        read: false
+                    });
+                }
+            });
+
+            setNotifications(newNotifications);
+        };
+
+        generateNotifications();
+    }, [inventoryItems, machines, livestock, activities]);
+
+    const markAllNotificationsAsRead = () => {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     };
 
     useEffect(() => {
@@ -146,22 +222,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchData = async () => {
         if (!supabase) return;
         try {
-            const { data: activitiesData } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
+            // Pegar farm_id do usuário atual
+            const userFarmId = currentUser.farm_id;
+
+            const { data: activitiesData } = await supabase.from('activities').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (activitiesData) setActivities(activitiesData as Activity[]);
 
-            const { data: inventoryData } = await supabase.from('inventory_items').select('*').order('created_at', { ascending: false });
+            const { data: inventoryData } = await supabase.from('inventory_items').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (inventoryData) setInventoryItems(inventoryData as InventoryItem[]);
 
-            const { data: machinesData } = await supabase.from('machines').select('*').order('created_at', { ascending: false });
+            const { data: machinesData } = await supabase.from('machines').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (machinesData) setMachines(machinesData as Machine[]);
 
-            const { data: livestockData } = await supabase.from('livestock').select('*').order('created_at', { ascending: false });
+            const { data: livestockData } = await supabase.from('livestock').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (livestockData) setLivestock(livestockData as Livestock[]);
 
-            const { data: teamData } = await supabase.from('team_members').select('*').order('created_at', { ascending: false });
+            const { data: teamData } = await supabase.from('team_members').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (teamData) setTeamMembers(teamData as TeamMember[]);
 
-            const { data: cropsData } = await supabase.from('crops').select('*').order('created_at', { ascending: false });
+            const { data: cropsData } = await supabase.from('crops').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
             if (cropsData) {
                 const updatedCrops = (cropsData as Crop[]).map(crop => calculateCropStatus(crop));
                 setCrops(updatedCrops);
@@ -177,6 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ...activity,
             id: Date.now().toString(),
             time: 'Agora mesmo',
+            farm_id: currentUser.farm_id
         };
         setActivities(prev => [newActivity, ...prev]);
         if (supabase) {
@@ -188,9 +268,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const newItem: InventoryItem = {
             ...item,
             id: Date.now().toString(),
+            farm_id: currentUser.farm_id
         };
-        // Fix: InventoryItem might not have 'time' property based on previous usage, checking types.ts would be better but assuming based on addActivity pattern or just ignore if not needed.
-        // Actually, let's stick to the existing logic but just add the new state.
         setInventoryItems(prev => [...prev, newItem]);
         if (supabase) {
             await supabase.from('inventory_items').insert([newItem]);
@@ -198,28 +277,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addMachine = async (machine: Machine) => {
-        setMachines(prev => [...prev, machine]);
+        const machineWithFarm = { ...machine, farm_id: currentUser.farm_id };
+        setMachines(prev => [...prev, machineWithFarm]);
         if (supabase) {
-            await supabase.from('machines').insert([machine]);
+            await supabase.from('machines').insert([machineWithFarm]);
         }
     };
 
     const addLivestock = async (animal: Livestock) => {
-        setLivestock(prev => [...prev, animal]);
+        const animalWithFarm = { ...animal, farm_id: currentUser.farm_id };
+        setLivestock(prev => [...prev, animalWithFarm]);
         if (supabase) {
-            await supabase.from('livestock').insert([animal]);
+            await supabase.from('livestock').insert([animalWithFarm]);
         }
     };
 
     const addTeamMember = async (member: TeamMember) => {
-        setTeamMembers(prev => [...prev, member]);
+        const memberWithFarm = { ...member, farm_id: currentUser.farm_id };
+        setTeamMembers(prev => [...prev, memberWithFarm]);
         if (supabase) {
-            await supabase.from('team_members').insert([member]);
+            await supabase.from('team_members').insert([memberWithFarm]);
         }
     };
 
     const addCrop = async (crop: Crop) => {
-        const updatedCrop = calculateCropStatus(crop);
+        const cropWithFarm = { ...crop, farm_id: currentUser.farm_id };
+        const updatedCrop = calculateCropStatus(cropWithFarm);
         setCrops(prev => [...prev, updatedCrop]);
         if (supabase) {
             await supabase.from('crops').insert([updatedCrop]);
@@ -255,7 +338,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 toggleMobileMenu,
                 closeMobileMenu,
                 darkMode, toggleDarkMode,
-                farmDetails, updateFarmDetails
+                farmDetails, updateFarmDetails,
+                notifications, markAllNotificationsAsRead
             }}
         >
             {children}

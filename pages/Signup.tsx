@@ -19,22 +19,23 @@ export default function Signup() {
         try {
             if (!supabase) throw new Error('Supabase client not initialized');
 
+            // Gerar farm_id único para o novo usuário
+            const farmId = `farm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
             const { error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     data: {
                         full_name: fullName,
+                        farm_id: farmId
                     },
                 },
             });
 
             if (error) throw error;
 
-            // Redirect to login or show success message
-            // For now, redirect to login with a message (or just let them login)
-            // Supabase might require email confirmation by default.
-            alert('Cadastro realizado com sucesso! Verifique seu email para confirmar.');
+            alert('Cadastro realizado com sucesso! Faça login para acessar o sistema.');
             navigate('/login');
         } catch (err: any) {
             setError(err.message || 'Erro ao criar conta');

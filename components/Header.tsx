@@ -1,21 +1,51 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Bell, User, MapPin, Search } from 'lucide-react';
+import { Menu, Bell, User, MapPin, Search, CheckCircle, RefreshCw, Navigation } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 const Header: React.FC = () => {
-  const { toggleMobileMenu, currentUser, farmDetails } = useApp();
-  const [showNotifications, setShowNotifications] = React.useState(false);
-  const [notifications, setNotifications] = React.useState([
-    { id: 1, title: 'Alerta de Chuva', message: 'Previsão de chuva forte para as próximas 2h.', time: '5 min atrás', read: false, type: 'warning' },
-    { id: 2, title: 'Manutenção Concluída', message: 'Trator T-04 pronto para uso.', time: '1h atrás', read: false, type: 'success' },
-    { id: 3, title: 'Estoque Baixo', message: 'Fertilizante NPK abaixo do nível mínimo.', time: '3h atrás', read: true, type: 'error' },
-  ]);
+  const { toggleMobileMenu, currentUser, farmDetails, updateFarmDetails, notifications, markAllNotificationsAsRead } = useApp();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
+    if (!showNotifications && unreadCount > 0) {
+      markAllNotificationsAsRead();
+    }
+  };
+
+  const handleSyncLocation = () => {
+    setIsLocating(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const newCoords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          updateFarmDetails({ coordinates: newCoords });
+          setIsLocating(false);
+        },
+        (error) => {
+          console.error("Erro ao obter localização", error);
+          setIsLocating(false);
+          alert("Não foi possível obter sua localização. Verifique as permissões do navegador.");
+        }
+      );
+    } else {
+      setIsLocating(false);
+      alert("Geolocalização não é suportada pelo seu navegador.");
+    }
+  };
+
+  const getNotificationColor = (type: 'info' | 'warning' | 'error' | 'success') => {
+    switch (type) {
+      case 'error': return 'text-red-600';
+      case 'warning': return 'text-amber-600';
+      case 'success': return 'text-green-600';
+      default: return 'text-gray-800';
+    }
   };
 
   return (
@@ -40,48 +70,88 @@ const Header: React.FC = () => {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-6">
-        {/* Farm Selector */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
-          <MapPin size={16} className="text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">{farmDetails.name}</span>
-          <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">Ativa</span>
+        {/* Farm Selector & GPS */}
+        <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-xl border border-gray-100 transition-all hover:border-green-200 hover:shadow-sm">
+          <div className={`p-1.5 rounded-lg ${farmDetails.coordinates ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+            <MapPin size={16} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-gray-700 leading-tight">{farmDetails.name}</span>
+
+            {!farmDetails.coordinates ? (
+              <button
+                onClick={handleSyncLocation}
+                disabled={isLocating}
+                className="flex items-center gap-1.5 text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors mt-0.5"
+              >
+                {isLocating ? (
+                  <RefreshCw size={10} className="animate-spin" />
+                ) : (
+                  <Navigation size={10} />
+                )}
+                {isLocating ? 'Buscando satélites...' : 'Sincronizar GPS'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5 group cursor-pointer" onClick={handleSyncLocation} title="Clique para atualizar GPS">
+                <span className="text-[10px] font-medium text-green-600 flex items-center gap-1">
+                  <CheckCircle size={10} />
+                  {farmDetails.coordinates}
+                </span>
+                <RefreshCw size={10} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Notifications */}
         <div className="relative">
           <button
             className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              if (!showNotifications) markAsRead();
-            }}
+            onClick={handleNotificationClick}
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
             )}
           </button>
 
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in z-50">
-              <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h3 className="font-bold text-gray-800">Notificações</h3>
-                <span className="text-xs text-gray-500 hover:text-green-700 cursor-pointer">Marcar todas como lidas</span>
+                {unreadCount > 0 && (
+                  <span
+                    onClick={markAllNotificationsAsRead}
+                    className="text-xs text-green-600 hover:text-green-700 cursor-pointer font-medium"
+                  >
+                    Marcar todas como lidas
+                  </span>
+                )}
               </div>
               <div className="max-h-96 overflow-y-auto">
-                {notifications.map((notification) => (
-                  <div key={notification.id} className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!notification.read ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <h4 className="text-sm font-bold text-gray-800">{notification.title}</h4>
-                      <span className="text-xs text-gray-400">{notification.time}</span>
-                    </div>
-                    <p className="text-xs text-gray-600">{notification.message}</p>
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400">
+                    <CheckCircle size={32} className="mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">Tudo certo por aqui!</p>
+                    <p className="text-xs mt-1">Nenhuma notificação no momento.</p>
                   </div>
-                ))}
+                ) : (
+                  notifications.map((notification) => (
+                    <div key={notification.id} className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!notification.read ? 'bg-blue-50/30' : ''}`}>
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className={`text-sm font-bold ${getNotificationColor(notification.type)}`}>{notification.title}</h4>
+                        <span className="text-xs text-gray-400">{notification.timestamp}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed">{notification.message}</p>
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="p-3 text-center border-t border-gray-100 bg-gray-50">
-                <button className="text-xs font-bold text-green-700 hover:text-green-800">Ver todas</button>
-              </div>
+              {notifications.length > 0 && (
+                <div className="p-3 text-center border-t border-gray-100 bg-gray-50">
+                  <button className="text-xs font-bold text-green-700 hover:text-green-800">Ver todas</button>
+                </div>
+              )}
             </div>
           )}
         </div>

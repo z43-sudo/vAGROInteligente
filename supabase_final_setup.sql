@@ -119,19 +119,61 @@ ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
--- 4. Criar Políticas de Segurança (Policies)
--- Permite acesso total (SELECT, INSERT, UPDATE, DELETE) para qualquer usuário autenticado
--- A filtragem real é feita no Frontend pelo farm_id, mas aqui deixamos aberto para usuários logados
--- Para maior segurança, futuramente você pode filtrar por farm_id no user_metadata
+-- 4. Criar Políticas de Segurança (Policies) - ISOLAMENTO ESTRITO
+-- As políticas abaixo garantem que o usuário só acesse dados onde o farm_id da linha
+-- seja IGUAL ao farm_id salvo nos metadados do usuário (auth.jwt() -> 'user_metadata' ->> 'farm_id')
 
--- Política Genérica: Permitir tudo para usuários autenticados (simplificado para desenvolvimento)
-CREATE POLICY "Acesso total para usuários autenticados" ON crops FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON machines FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON activities FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON livestock FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON inventory_items FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON team_members FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Acesso total para usuários autenticados" ON messages FOR ALL USING (auth.role() = 'authenticated');
+-- Remover políticas antigas se existirem
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON crops;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON machines;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON activities;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON livestock;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON inventory_items;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON team_members;
+DROP POLICY IF EXISTS "Acesso total para usuários autenticados" ON messages;
+
+-- Criar novas políticas estritas
+-- CROPS
+CREATE POLICY "Isolamento por Fazenda" ON crops
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- MACHINES
+CREATE POLICY "Isolamento por Fazenda" ON machines
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- ACTIVITIES
+CREATE POLICY "Isolamento por Fazenda" ON activities
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- LIVESTOCK
+CREATE POLICY "Isolamento por Fazenda" ON livestock
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- INVENTORY
+CREATE POLICY "Isolamento por Fazenda" ON inventory_items
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- TEAM_MEMBERS
+CREATE POLICY "Isolamento por Fazenda" ON team_members
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
+
+-- MESSAGES (CHAT)
+CREATE POLICY "Isolamento por Fazenda" ON messages
+    FOR ALL
+    USING (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'))
+    WITH CHECK (farm_id = (auth.jwt() -> 'user_metadata' ->> 'farm_id'));
 
 -- 5. Habilitar Realtime para o Chat
 -- Isso permite que as mensagens cheguem instantaneamente

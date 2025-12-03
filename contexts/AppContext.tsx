@@ -83,12 +83,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [crops, setCrops] = useState<Crop[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
+    // SEGURANÇA: farm_id começa vazio para evitar vazamento de dados
     const [currentUser, setCurrentUser] = useState<UserProfile>({
-        name: 'Gestor',
-        role: 'Administrador',
-        email: 'admin@agro.com',
-        farm_id: 'farm_1' // Default/Mock farm ID
+        name: '',
+        role: '',
+        email: '',
+        farm_id: ''
     });
+
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
@@ -98,10 +100,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [farmDetails, setFarmDetails] = useState(() => {
         const saved = localStorage.getItem('farmDetails');
         return saved ? JSON.parse(saved) : {
-            name: 'Agro Inteligente',
-            cnpj: '00.000.000/0001-00',
-            address: 'Rodovia BR-163, Km 700',
-            coordinates: '-13.422328, -49.147004' // Localização Exata Padrão
+            name: 'Carregando...',
+            cnpj: '',
+            address: '',
+            coordinates: ''
         };
     });
 
@@ -199,30 +201,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     useEffect(() => {
         if (supabase) {
-            fetchData();
             fetchUser();
         }
     }, []);
 
-    // ... (fetchUser and fetchData implementation remains the same)
+    // Fetch data only after user is loaded and has a farm_id
+    useEffect(() => {
+        if (currentUser.farm_id) {
+            fetchData();
+        }
+    }, [currentUser.farm_id]);
 
     const fetchUser = async () => {
         if (!supabase) return;
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+            const farmId = user.user_metadata?.farm_id || '';
             setCurrentUser(prev => ({
                 ...prev,
                 email: user.email || prev.email,
-                name: user.user_metadata?.full_name || 'Gestor',
-                farm_id: user.user_metadata?.farm_id || 'farm_1'
+                name: user.user_metadata?.full_name || 'Usuário',
+                farm_id: farmId
             }));
         }
     };
 
     const fetchData = async () => {
-        if (!supabase) return;
+        if (!supabase || !currentUser.farm_id) return;
         try {
-            // Pegar farm_id do usuário atual
             const userFarmId = currentUser.farm_id;
 
             const { data: activitiesData } = await supabase.from('activities').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
@@ -252,6 +258,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addActivity = async (activity: Omit<Activity, 'id' | 'time'>) => {
+        if (!currentUser.farm_id) return;
         const newActivity: Activity = {
             ...activity,
             id: Date.now().toString(),
@@ -265,6 +272,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
+        if (!currentUser.farm_id) return;
         const newItem: InventoryItem = {
             ...item,
             id: Date.now().toString(),
@@ -277,6 +285,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addMachine = async (machine: Machine) => {
+        if (!currentUser.farm_id) return;
         const machineWithFarm = { ...machine, farm_id: currentUser.farm_id };
         setMachines(prev => [...prev, machineWithFarm]);
         if (supabase) {
@@ -285,6 +294,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addLivestock = async (animal: Livestock) => {
+        if (!currentUser.farm_id) return;
         const animalWithFarm = { ...animal, farm_id: currentUser.farm_id };
         setLivestock(prev => [...prev, animalWithFarm]);
         if (supabase) {
@@ -293,6 +303,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addTeamMember = async (member: TeamMember) => {
+        if (!currentUser.farm_id) return;
         const memberWithFarm = { ...member, farm_id: currentUser.farm_id };
         setTeamMembers(prev => [...prev, memberWithFarm]);
         if (supabase) {
@@ -301,6 +312,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addCrop = async (crop: Crop) => {
+        if (!currentUser.farm_id) return;
         const cropWithFarm = { ...crop, farm_id: currentUser.farm_id };
         const updatedCrop = calculateCropStatus(cropWithFarm);
         setCrops(prev => [...prev, updatedCrop]);

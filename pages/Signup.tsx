@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { Leaf, Tractor, Lock, Mail, ArrowRight, Loader2, User } from 'lucide-react';
+import { Leaf, Tractor, Lock, Mail, ArrowRight, Loader2, User, Users, Building2 } from 'lucide-react';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
+    const [isOwner, setIsOwner] = useState(true); // true = Dono, false = Membro
+    const [farmCode, setFarmCode] = useState(''); // Código da fazenda para membros
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
@@ -19,8 +21,16 @@ export default function Signup() {
         try {
             if (!supabase) throw new Error('Supabase client not initialized');
 
-            // Gerar farm_id único para o novo usuário
-            const farmId = `farm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            let finalFarmId = '';
+
+            if (isOwner) {
+                // Gerar NOVO farm_id único para o Dono
+                finalFarmId = `farm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            } else {
+                // Usar o código fornecido para Membros
+                if (!farmCode.trim()) throw new Error('Por favor, insira o código da fazenda.');
+                finalFarmId = farmCode.trim();
+            }
 
             const { error } = await supabase.auth.signUp({
                 email,
@@ -28,14 +38,15 @@ export default function Signup() {
                 options: {
                     data: {
                         full_name: fullName,
-                        farm_id: farmId
+                        farm_id: finalFarmId,
+                        role: isOwner ? 'owner' : 'member' // Salvar o papel do usuário
                     },
                 },
             });
 
             if (error) throw error;
 
-            alert('Cadastro realizado com sucesso! Faça login para acessar o sistema.');
+            alert(`Cadastro realizado com sucesso!\n\n${isOwner ? `Seu Código de Fazenda é: ${finalFarmId}\nGuarde-o para convidar sua equipe!` : 'Você foi vinculado à fazenda com sucesso!'}`);
             navigate('/login');
         } catch (err: any) {
             setError(err.message || 'Erro ao criar conta');
@@ -79,6 +90,27 @@ export default function Signup() {
                         )}
 
                         <form onSubmit={handleSignup} className="space-y-4">
+
+                            {/* Toggle Dono / Membro */}
+                            <div className="flex bg-[#0f172a]/50 p-1 rounded-xl border border-gray-700 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOwner(true)}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${isOwner ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                                >
+                                    <Building2 size={16} />
+                                    Sou Dono
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOwner(false)}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${!isOwner ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                                >
+                                    <Users size={16} />
+                                    Sou Equipe
+                                </button>
+                            </div>
+
                             <div className="space-y-2">
                                 <label className="text-sm text-gray-400 ml-1">Nome Completo</label>
                                 <div className="relative group">
@@ -130,6 +162,25 @@ export default function Signup() {
                                 </div>
                             </div>
 
+                            {!isOwner && (
+                                <div className="space-y-2 animate-fade-in">
+                                    <label className="text-sm text-green-400 ml-1 font-bold">Código da Fazenda (Peça ao Dono)</label>
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Building2 className="h-5 w-5 text-green-500" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            required={!isOwner}
+                                            value={farmCode}
+                                            onChange={(e) => setFarmCode(e.target.value)}
+                                            className="block w-full pl-10 pr-3 py-3 bg-green-900/20 border border-green-500/50 rounded-xl text-green-100 placeholder-green-700/50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                                            placeholder="Ex: farm_123456789"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -139,7 +190,7 @@ export default function Signup() {
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                 ) : (
                                     <>
-                                        Criar Conta <ArrowRight className="ml-2 w-4 h-4" />
+                                        {isOwner ? 'Criar Minha Fazenda' : 'Entrar na Equipe'} <ArrowRight className="ml-2 w-4 h-4" />
                                     </>
                                 )}
                             </button>

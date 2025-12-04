@@ -159,3 +159,26 @@ export interface AdminUser {
   created_at: string;
   updated_at: string;
 }
+
+export interface PurchaseOrder {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  supplier: string;
+  category: 'Sementes' | 'Fertilizantes' | 'Defensivos' | 'Peças' | 'Combustível' | 'Outros';
+  status: 'Pendente' | 'Aprovado' | 'Rejeitado' | 'Pago';
+  date: string;
+  farm_id: string;
+}
+
+export interface FinancialTransaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'Receita' | 'Despesa';
+  category: string;
+  date: string;
+  farm_id: string;
+}

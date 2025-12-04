@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Shield, Users, Search, Filter, Edit2, Save, X,
     CheckCircle, XCircle, Clock, AlertTriangle, Crown,
-    TrendingUp, Calendar, Mail, Building2, RefreshCw, Database
+    TrendingUp, Calendar, Mail, Building2, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { UserProfile } from '../types';
@@ -20,7 +20,6 @@ export default function AdminPanel() {
     const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
     const [isAdmin, setIsAdmin] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [resettingCache, setResettingCache] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
         active: 0,
@@ -79,57 +78,6 @@ export default function AdminPanel() {
             console.error('Erro ao carregar usuários:', err);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const resetSystemCache = async () => {
-        if (!confirm('⚠️ ATENÇÃO!\n\nEsta ação irá:\n\n1. Forçar reload de TODOS os dados do sistema\n2. Corrigir problemas de sincronização\n3. Garantir que cada usuário veja apenas seus dados\n\nDeseja continuar?')) {
-            return;
-        }
-
-        setResettingCache(true);
-        try {
-            console.log('🔄 Iniciando reset do cache do sistema...');
-
-            // 1. Recarregar todos os usuários
-            console.log('📥 Recarregando usuários...');
-            await loadUsers();
-
-            // 2. Verificar e corrigir farm_ids
-            console.log('🔧 Verificando farm_ids...');
-            const { data: usersData } = await supabase
-                .from('user_profiles')
-                .select('user_id, farm_id');
-
-            if (usersData) {
-                for (const user of usersData) {
-                    if (!user.farm_id || user.farm_id === '' || user.farm_id.startsWith('default-farm')) {
-                        console.log(`🔧 Corrigindo farm_id para usuário ${user.user_id}`);
-                        await supabase
-                            .from('user_profiles')
-                            .update({ farm_id: `farm-${user.user_id}` })
-                            .eq('user_id', user.user_id);
-                    }
-                }
-            }
-
-            // 3. Forçar reload final
-            console.log('🔄 Reload final...');
-            await loadUsers();
-
-            console.log('✅ Reset do cache concluído!');
-            alert('✅ Reset do Sistema Concluído!\n\n' +
-                'Todos os dados foram recarregados.\n' +
-                'Farm IDs foram corrigidos.\n\n' +
-                'Instrua os usuários a:\n' +
-                '1. Fazer LOGOUT\n' +
-                '2. Fazer LOGIN novamente\n' +
-                '3. Verificar se veem apenas seus dados');
-        } catch (error) {
-            console.error('❌ Erro ao resetar cache:', error);
-            alert('❌ Erro ao resetar cache do sistema.\n\nVerifique o console (F12) para mais detalhes.');
-        } finally {
-            setResettingCache(false);
         }
     };
 
@@ -308,8 +256,8 @@ export default function AdminPanel() {
                             onClick={() => loadUsers()}
                             disabled={loading}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${loading
-                                ? 'bg-gray-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700'
+                                    ? 'bg-gray-300 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700'
                                 } text-white`}
                             title="Recarregar dados"
                         >
@@ -324,41 +272,6 @@ export default function AdminPanel() {
                         <span className="text-sm text-gray-600">
                             Logado como: <strong className="text-green-600">{user?.email}</strong>
                         </span>
-                    </div>
-                </div>
-
-                {/* Reset System Cache - Seção Destacada */}
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-xl p-6 mb-6 shadow-md">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                            <div className="bg-orange-100 p-3 rounded-xl">
-                                <Database size={32} className="text-orange-600" />
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="text-lg font-bold text-gray-800 mb-1">Reset System Cache</h3>
-                                <p className="text-sm text-gray-600 mb-2">
-                                    Corrige problemas de sincronização de dados entre usuários
-                                </p>
-                                <ul className="text-xs text-gray-500 space-y-1">
-                                    <li>• Força reload de todos os dados do sistema</li>
-                                    <li>• Corrige farm_ids inválidos ou vazios</li>
-                                    <li>• Garante que cada usuário veja apenas seus dados</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <button
-                            onClick={resetSystemCache}
-                            disabled={resettingCache}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-all font-semibold ${resettingCache
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-orange-600 hover:bg-orange-700 hover:shadow-lg transform hover:scale-105'
-                                } text-white shadow-md`}
-                        >
-                            <Database size={20} className={resettingCache ? 'animate-spin' : ''} />
-                            <span>
-                                {resettingCache ? 'Resetando...' : 'Executar Reset'}
-                            </span>
-                        </button>
                     </div>
                 </div>
 

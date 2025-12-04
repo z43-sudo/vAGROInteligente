@@ -12,16 +12,21 @@ interface UserProfile {
 interface AppContextType {
     activities: Activity[];
     addActivity: (activity: Omit<Activity, 'id' | 'time'>) => void;
+    deleteActivity: (id: string) => void;
     inventoryItems: InventoryItem[];
     addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
+    deleteInventoryItem: (id: string) => void;
     machines: Machine[];
     addMachine: (machine: Machine) => void;
+    deleteMachine: (id: string) => void;
     livestock: Livestock[];
     addLivestock: (animal: Livestock) => void;
+    deleteLivestock: (id: string) => void;
     teamMembers: TeamMember[];
     addTeamMember: (member: TeamMember) => void;
     crops: Crop[];
     addCrop: (crop: Crop) => void;
+    deleteCrop: (id: string) => void;
     currentUser: UserProfile;
     updateCurrentUser: (user: UserProfile) => void;
     isMobileMenuOpen: boolean;
@@ -402,6 +407,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentUser(user);
     };
 
+    const deleteActivity = async (id: string) => {
+        setActivities(prev => prev.filter(a => a.id !== id));
+        if (supabase) {
+            await supabase.from('activities').delete().eq('id', id);
+        }
+    };
+
+    const deleteInventoryItem = async (id: string) => {
+        setInventoryItems(prev => prev.filter(i => i.id !== id));
+        if (supabase) {
+            await supabase.from('inventory_items').delete().eq('id', id);
+        }
+    };
+
+    const deleteMachine = async (id: string) => {
+        setMachines(prev => prev.filter(m => m.id !== id));
+        if (supabase) {
+            await supabase.from('machines').delete().eq('id', id);
+        }
+    };
+
+    const deleteLivestock = async (id: string) => {
+        setLivestock(prev => prev.filter(l => l.id !== id));
+        if (supabase) {
+            await supabase.from('livestock').delete().eq('id', id);
+        }
+    };
+
+    const deleteCrop = async (id: string) => {
+        setCrops(prev => prev.filter(c => c.id !== id));
+        if (supabase) {
+            await supabase.from('crops').delete().eq('id', id);
+        }
+    };
+
     const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -410,16 +450,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             value={{
                 activities,
                 addActivity,
+                deleteActivity,
                 inventoryItems,
                 addInventoryItem,
+                deleteInventoryItem,
                 machines,
                 addMachine,
+                deleteMachine,
                 livestock,
                 addLivestock,
+                deleteLivestock,
                 teamMembers,
                 addTeamMember,
                 crops,
                 addCrop,
+                deleteCrop,
 
                 currentUser,
                 updateCurrentUser,

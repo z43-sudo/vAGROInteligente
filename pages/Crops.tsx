@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Sprout, Calendar, Filter, Download, Plus, X, TrendingUp, TrendingDown, DollarSign, BarChart3, RefreshCw } from 'lucide-react';
+import { Sprout, Calendar, Filter, Download, Plus, X, TrendingUp, TrendingDown, DollarSign, BarChart3, RefreshCw, Trash2 } from 'lucide-react';
 import { Crop } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { fetchCommodityPrices, fetchPriceHistory, calculateMarketInsights, CommodityPrice, HistoricalPrice } from '../services/commodityService';
 
 const Crops: React.FC = () => {
-  const { crops, addCrop } = useApp();
+  const { crops, addCrop, deleteCrop } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -423,6 +423,7 @@ const Crops: React.FC = () => {
                 <th className="px-6 py-4">Estágio</th>
                 <th className="px-6 py-4">Data Plantio</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -435,11 +436,24 @@ const Crops: React.FC = () => {
                     <td className="px-6 py-4"><span className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-semibold">{crop.stage}</span></td>
                     <td className="px-6 py-4">--/--/----</td>
                     <td className="px-6 py-4 flex items-center gap-1 text-green-600 font-medium"><div className="w-2 h-2 rounded-full bg-green-500"></div> {crop.status}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => {
+                          if (confirm('Tem certeza que deseja deletar esta safra?')) {
+                            deleteCrop(crop.id);
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                        title="Deletar safra"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     Nenhuma safra cadastrada.
                   </td>
                 </tr>

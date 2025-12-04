@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Tractor, Fuel, Wrench, MapPin, Activity, AlertTriangle, Clock, Plus } from 'lucide-react';
+import { Tractor, Fuel, Wrench, MapPin, Activity, AlertTriangle, Clock, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 const Machines: React.FC = () => {
-    const { machines: machinesFromContext } = useApp();
+    const { machines: machinesFromContext, deleteMachine } = useApp();
     const machines = machinesFromContext;
 
     const getStatusColor = (status: string) => {
@@ -98,6 +98,18 @@ const Machines: React.FC = () => {
                                     <span>Máquina em manutenção. Verifique o status na oficina.</span>
                                 </div>
                             )}
+
+                            <button
+                                onClick={() => {
+                                    if (confirm('Tem certeza que deseja deletar esta máquina?')) {
+                                        deleteMachine(machine.id);
+                                    }
+                                }}
+                                className="mt-4 w-full flex items-center justify-center gap-2 text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors text-sm font-medium"
+                            >
+                                <Trash2 size={16} />
+                                Deletar Máquina
+                            </button>
                         </div>
                     ))
                 )}

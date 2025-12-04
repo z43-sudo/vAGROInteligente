@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, Heart, Scale, Syringe, AlertCircle, Plus, X, TrendingUp, Calculator, MapPin } from 'lucide-react';
+import { Activity, Heart, Scale, Syringe, AlertCircle, Plus, X, TrendingUp, Calculator, MapPin, Trash2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Livestock as LivestockType } from '../types';
 import LivestockMarketCharts from '../components/LivestockMarketCharts';
@@ -7,7 +7,7 @@ import LivestockCalculators from '../components/LivestockCalculators';
 import SlaughterhouseLogistics from '../components/SlaughterhouseLogistics';
 
 const Livestock: React.FC = () => {
-    const { livestock, addLivestock } = useApp();
+    const { livestock, addLivestock, deleteLivestock } = useApp();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'herd' | 'market' | 'calculators' | 'logistics'>('herd');
     const [newAnimal, setNewAnimal] = useState<Partial<LivestockType>>({
@@ -145,7 +145,20 @@ const Livestock: React.FC = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <button className="text-blue-600 hover:text-blue-800 text-xs font-medium">Detalhes</button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button className="text-blue-600 hover:text-blue-800 text-xs font-medium">Detalhes</button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('Tem certeza que deseja deletar este animal?')) {
+                                                                    deleteLivestock(animal.id);
+                                                                }
+                                                            }}
+                                                            className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                                            title="Deletar animal"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

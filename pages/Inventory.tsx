@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Package, AlertTriangle, TrendingDown, TrendingUp, Search, Filter, Plus } from 'lucide-react';
+import { Package, AlertTriangle, TrendingDown, TrendingUp, Search, Filter, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 const Inventory: React.FC = () => {
-    const { inventoryItems } = useApp();
+    const { inventoryItems, deleteInventoryItem } = useApp();
     const items = inventoryItems;
 
     return (
@@ -71,7 +71,7 @@ const Inventory: React.FC = () => {
                             <th className="px-6 py-4">Quantidade</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4">Última Reposição</th>
-                            <th className="px-6 py-4">Ação</th>
+                            <th className="px-6 py-4">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -99,7 +99,20 @@ const Inventory: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4">{new Date(item.lastRestock).toLocaleDateString('pt-BR')}</td>
                                     <td className="px-6 py-4">
-                                        <button className="text-green-700 hover:text-green-900 font-medium text-xs">Solicitar</button>
+                                        <div className="flex items-center gap-2">
+                                            <button className="text-green-700 hover:text-green-900 font-medium text-xs">Solicitar</button>
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('Tem certeza que deseja deletar este item?')) {
+                                                        deleteInventoryItem(item.id);
+                                                    }
+                                                }}
+                                                className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                                title="Deletar item"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))

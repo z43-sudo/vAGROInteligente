@@ -89,12 +89,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [crops, setCrops] = useState<Crop[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
-    // SEGURANÇA: farm_id padrão para garantir funcionamento
+    // SEGURANÇA: Inicializar com vazio para evitar vazamento de dados
     const [currentUser, setCurrentUser] = useState<UserProfile>({
         name: 'Usuário',
         role: 'Proprietário',
         email: '',
-        farm_id: 'default-farm-' + Date.now()
+        farm_id: '' // Vazio até carregar o usuário real
     });
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -251,6 +251,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchData = async () => {
         if (!supabase || !currentUser.farm_id) return;
+
+        // Proteção extra: não buscar se for ID padrão antigo ou vazio
+        if (currentUser.farm_id.startsWith('default-farm-')) return;
+
         try {
             const userFarmId = currentUser.farm_id;
 

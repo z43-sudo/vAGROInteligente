@@ -1,8 +1,8 @@
 // Serviço de clima em tempo real usando OpenWeatherMap API
 // Para usar, você precisa criar uma conta gratuita em https://openweathermap.org/api
-// e adicionar sua chave API no arquivo .env como VITE_WEATHER_API_KEY
+// e adicionar sua chave API no arquivo .env como VITE_OPENWEATHER_API_KEY
 
-const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY || '';
+const WEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5';
 
 export interface WeatherData {

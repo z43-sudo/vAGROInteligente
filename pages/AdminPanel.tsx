@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Shield, Users, Search, Filter, Edit2, Save, X,
     CheckCircle, XCircle, Clock, AlertTriangle, Crown,
-    TrendingUp, Calendar, Mail, Building2, RefreshCw
+    TrendingUp, Calendar, Mail, Building2, RefreshCw,
+    Download, Trash2, Check, BarChart3, Activity,
+    UserPlus, DollarSign, Zap, Eye, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { UserProfile } from '../types';
@@ -20,17 +22,67 @@ export default function AdminPanel() {
     const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
     const [isAdmin, setIsAdmin] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+    const [showBulkActions, setShowBulkActions] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+    const [lastSync, setLastSync] = useState<Date>(new Date());
     const [stats, setStats] = useState({
         total: 0,
         active: 0,
         trial: 0,
         suspended: 0,
+        newThisMonth: 0,
+        revenue: 0,
     });
 
     // Verificar se o usuário é admin
     useEffect(() => {
         checkAdminAccess();
     }, [user]);
+
+    // Setup Realtime Subscription
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        const channel = supabase
+            .channel('admin-users-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'user_profiles'
+                },
+                (payload) => {
+                    console.log('🔄 Realtime update received:', payload);
+                    setSyncStatus('syncing');
+
+                    // Handle different types of changes
+                    if (payload.eventType === 'INSERT') {
+                        setUsers(prev => [payload.new as UserProfile, ...prev]);
+                    } else if (payload.eventType === 'UPDATE') {
+                        setUsers(prev => prev.map(u =>
+                            u.id === payload.new.id ? payload.new as UserProfile : u
+                        ));
+                    } else if (payload.eventType === 'DELETE') {
+                        setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+                    }
+
+                    setLastSync(new Date());
+                    setTimeout(() => setSyncStatus('synced'), 500);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [isAdmin]);
+
+    // Recalculate stats when users change
+    useEffect(() => {
+        calculateStats(users);
+    }, [users]);
 
     const checkAdminAccess = async () => {
         if (!user?.email) {
@@ -64,6 +116,7 @@ export default function AdminPanel() {
     const loadUsers = async () => {
         try {
             setLoading(true);
+            setSyncStatus('syncing');
             const { data, error } = await supabase
                 .from('user_profiles')
                 .select('*')
@@ -73,20 +126,37 @@ export default function AdminPanel() {
 
             setUsers(data || []);
             setFilteredUsers(data || []);
-            calculateStats(data || []);
+            setLastSync(new Date());
+            setSyncStatus('synced');
         } catch (err) {
             console.error('Erro ao carregar usuários:', err);
+            setSyncStatus('error');
         } finally {
             setLoading(false);
         }
     };
 
     const calculateStats = (userList: UserProfile[]) => {
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const newThisMonth = userList.filter(u =>
+            new Date(u.created_at) >= firstDayOfMonth
+        ).length;
+
+        // Simple revenue calculation (you can adjust based on your pricing)
+        const planPrices = { free: 0, basic: 147, professional: 247, enterprise: 500 };
+        const revenue = userList
+            .filter(u => u.subscription_status === 'active')
+            .reduce((sum, u) => sum + (planPrices[u.subscription_plan as keyof typeof planPrices] || 0), 0);
+
         setStats({
             total: userList.length,
             active: userList.filter(u => u.subscription_status === 'active').length,
             trial: userList.filter(u => u.subscription_status === 'trial').length,
             suspended: userList.filter(u => u.subscription_status === 'suspended').length,
+            newThisMonth,
+            revenue,
         });
     };
 
@@ -94,7 +164,6 @@ export default function AdminPanel() {
     useEffect(() => {
         let filtered = users;
 
-        // Filtro de busca
         if (searchTerm) {
             filtered = filtered.filter(u =>
                 u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,12 +172,10 @@ export default function AdminPanel() {
             );
         }
 
-        // Filtro de status
         if (filterStatus !== 'all') {
             filtered = filtered.filter(u => u.subscription_status === filterStatus);
         }
 
-        // Filtro de plano
         if (filterPlan !== 'all') {
             filtered = filtered.filter(u => u.subscription_plan === filterPlan);
         }
@@ -129,14 +196,6 @@ export default function AdminPanel() {
 
         setSaving(true);
         try {
-            console.log('💾 Salvando alterações no Supabase...');
-            console.log('Dados a serem salvos:', {
-                id: editingUser,
-                subscription_plan: editForm.subscription_plan,
-                subscription_status: editForm.subscription_status,
-            });
-
-            // Atualizar no Supabase
             const { error } = await supabase
                 .from('user_profiles')
                 .update({
@@ -148,26 +207,14 @@ export default function AdminPanel() {
                 })
                 .eq('id', editingUser);
 
-            if (error) {
-                console.error('❌ Erro do Supabase:', error);
-                throw error;
-            }
+            if (error) throw error;
 
-            console.log('✅ Dados salvos no Supabase com sucesso!');
-
-            // Recarregar TODOS os dados do Supabase para garantir sincronização
-            console.log('🔄 Recarregando dados do Supabase...');
-            await loadUsers();
-
-            // Limpar formulário de edição
             setEditingUser(null);
             setEditForm({});
-
-            console.log('✅ Atualização completa!');
-            alert('✅ Usuário atualizado com sucesso!\n\nAs alterações foram salvas no banco de dados.');
+            showToast('✅ Usuário atualizado com sucesso!', 'success');
         } catch (err: any) {
             console.error('❌ Erro ao atualizar usuário:', err);
-            alert(`❌ Erro ao atualizar usuário:\n\n${err.message || 'Erro desconhecido'}\n\nVerifique o console (F12) para mais detalhes.`);
+            showToast(`❌ Erro: ${err.message}`, 'error');
         } finally {
             setSaving(false);
         }
@@ -176,6 +223,98 @@ export default function AdminPanel() {
     const handleCancel = () => {
         setEditingUser(null);
         setEditForm({});
+    };
+
+    // Bulk Actions
+    const toggleUserSelection = (userId: string) => {
+        const newSelection = new Set(selectedUsers);
+        if (newSelection.has(userId)) {
+            newSelection.delete(userId);
+        } else {
+            newSelection.add(userId);
+        }
+        setSelectedUsers(newSelection);
+        setShowBulkActions(newSelection.size > 0);
+    };
+
+    const selectAllFiltered = () => {
+        const allIds = new Set(filteredUsers.map(u => u.id));
+        setSelectedUsers(allIds);
+        setShowBulkActions(allIds.size > 0);
+    };
+
+    const clearSelection = () => {
+        setSelectedUsers(new Set());
+        setShowBulkActions(false);
+    };
+
+    const handleBulkAction = async (action: 'activate' | 'suspend' | 'delete') => {
+        if (selectedUsers.size === 0) return;
+
+        const confirmMessage = action === 'delete'
+            ? `Tem certeza que deseja DELETAR ${selectedUsers.size} usuários? Esta ação não pode ser desfeita!`
+            : `Tem certeza que deseja ${action === 'activate' ? 'ativar' : 'suspender'} ${selectedUsers.size} usuários?`;
+
+        if (!confirm(confirmMessage)) return;
+
+        setSaving(true);
+        try {
+            const userIds = Array.from(selectedUsers);
+
+            if (action === 'delete') {
+                const { error } = await supabase
+                    .from('user_profiles')
+                    .delete()
+                    .in('id', userIds);
+                if (error) throw error;
+            } else {
+                const newStatus = action === 'activate' ? 'active' : 'suspended';
+                const { error } = await supabase
+                    .from('user_profiles')
+                    .update({ subscription_status: newStatus })
+                    .in('id', userIds);
+                if (error) throw error;
+            }
+
+            clearSelection();
+            showToast(`✅ ${selectedUsers.size} usuários ${action === 'delete' ? 'deletados' : 'atualizados'}!`, 'success');
+        } catch (err: any) {
+            showToast(`❌ Erro: ${err.message}`, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Export to CSV
+    const exportToCSV = () => {
+        const headers = ['Nome', 'Email', 'Farm ID', 'Plano', 'Status', 'Data de Criação'];
+        const rows = filteredUsers.map(u => [
+            u.full_name || '',
+            u.email,
+            u.farm_id || '',
+            u.subscription_plan,
+            u.subscription_status,
+            new Date(u.created_at).toLocaleDateString('pt-BR')
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `usuarios_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+
+        showToast('✅ Dados exportados com sucesso!', 'success');
+    };
+
+    // Toast notification system
+    const showToast = (message: string, type: 'success' | 'error') => {
+        // Simple alert for now - you can replace with a proper toast library
+        alert(message);
     };
 
     const getStatusBadge = (status: string) => {
@@ -238,7 +377,7 @@ export default function AdminPanel() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -249,65 +388,79 @@ export default function AdminPanel() {
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-800">Painel de Administração</h1>
-                                <p className="text-gray-600">Gerencie todos os usuários e assinaturas</p>
+                                <p className="text-gray-600">Gerencie todos os usuários e assinaturas em tempo real</p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => loadUsers()}
-                            disabled={loading}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${loading
-                                    ? 'bg-gray-300 cursor-not-allowed'
-                                    : 'bg-blue-600 hover:bg-blue-700'
-                                } text-white`}
-                            title="Recarregar dados"
-                        >
-                            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                            <span className="text-sm font-medium">
-                                {loading ? 'Carregando...' : 'Recarregar'}
-                            </span>
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {/* Sync Status Indicator */}
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${syncStatus === 'synced' ? 'bg-green-50 text-green-700' :
+                                    syncStatus === 'syncing' ? 'bg-blue-50 text-blue-700' :
+                                        'bg-red-50 text-red-700'
+                                }`}>
+                                <Activity size={16} className={syncStatus === 'syncing' ? 'animate-pulse' : ''} />
+                                <span className="text-xs font-medium">
+                                    {syncStatus === 'synced' ? 'Sincronizado' :
+                                        syncStatus === 'syncing' ? 'Sincronizando...' :
+                                            'Erro de sinc.'}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => loadUsers()}
+                                disabled={loading}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                                    } text-white shadow-md`}
+                            >
+                                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                                <span className="text-sm font-medium">
+                                    {loading ? 'Carregando...' : 'Recarregar'}
+                                </span>
+                            </button>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 mt-4">
                         <Crown className="w-5 h-5 text-yellow-500" />
                         <span className="text-sm text-gray-600">
                             Logado como: <strong className="text-green-600">{user?.email}</strong>
                         </span>
+                        <span className="text-xs text-gray-400 ml-4">
+                            Última atualização: {lastSync.toLocaleTimeString('pt-BR')}
+                        </span>
                     </div>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                {/* Enhanced Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">Total de Usuários</p>
+                                <p className="text-sm text-gray-600 mb-1">Total</p>
                                 <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
                             </div>
                             <Users className="w-12 h-12 text-blue-500 opacity-20" />
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">Assinaturas Ativas</p>
+                                <p className="text-sm text-gray-600 mb-1">Ativos</p>
                                 <p className="text-3xl font-bold text-green-600">{stats.active}</p>
                             </div>
                             <CheckCircle className="w-12 h-12 text-green-500 opacity-20" />
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">Em Trial</p>
+                                <p className="text-sm text-gray-600 mb-1">Trial</p>
                                 <p className="text-3xl font-bold text-blue-600">{stats.trial}</p>
                             </div>
                             <Clock className="w-12 h-12 text-blue-500 opacity-20" />
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 mb-1">Suspensos</p>
@@ -316,13 +469,71 @@ export default function AdminPanel() {
                             <AlertTriangle className="w-12 h-12 text-red-500 opacity-20" />
                         </div>
                     </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Novos/Mês</p>
+                                <p className="text-3xl font-bold text-purple-600">{stats.newThisMonth}</p>
+                            </div>
+                            <UserPlus className="w-12 h-12 text-purple-500 opacity-20" />
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Receita</p>
+                                <p className="text-2xl font-bold text-emerald-600">R$ {stats.revenue}</p>
+                            </div>
+                            <DollarSign className="w-12 h-12 text-emerald-500 opacity-20" />
+                        </div>
+                    </div>
                 </div>
 
-                {/* Filters */}
+                {/* Bulk Actions Bar */}
+                {showBulkActions && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Check className="w-5 h-5 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-900">
+                                {selectedUsers.size} usuário(s) selecionado(s)
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => handleBulkAction('activate')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                            >
+                                Ativar Selecionados
+                            </button>
+                            <button
+                                onClick={() => handleBulkAction('suspend')}
+                                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+                            >
+                                Suspender Selecionados
+                            </button>
+                            <button
+                                onClick={() => handleBulkAction('delete')}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                            >
+                                Deletar Selecionados
+                            </button>
+                            <button
+                                onClick={clearSelection}
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Filters & Actions */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         {/* Search */}
-                        <div className="relative">
+                        <div className="relative md:col-span-2">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                             <input
                                 type="text"
@@ -365,14 +576,40 @@ export default function AdminPanel() {
                             </select>
                         </div>
                     </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200">
+                        <button
+                            onClick={selectAllFiltered}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                        >
+                            <Check size={16} />
+                            Selecionar Todos ({filteredUsers.length})
+                        </button>
+                        <button
+                            onClick={exportToCSV}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        >
+                            <Download size={16} />
+                            Exportar CSV
+                        </button>
+                    </div>
                 </div>
 
                 {/* Users Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                                 <tr>
+                                    <th className="px-6 py-4 text-left">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+                                            onChange={(e) => e.target.checked ? selectAllFiltered() : clearSelection()}
+                                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                        />
+                                    </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Usuário
                                     </th>
@@ -396,13 +633,23 @@ export default function AdminPanel() {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredUsers.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                                            Nenhum usuário encontrado
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                                            <p>Nenhum usuário encontrado</p>
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredUsers.map((user) => (
-                                        <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={user.id} className={`hover:bg-gray-50 transition-colors ${selectedUsers.has(user.id) ? 'bg-blue-50' : ''
+                                            }`}>
+                                            <td className="px-6 py-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedUsers.has(user.id)}
+                                                    onChange={() => toggleUserSelection(user.id)}
+                                                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                                />
+                                            </td>
                                             {editingUser === user.id ? (
                                                 <>
                                                     {/* Modo de Edição */}
@@ -458,17 +705,11 @@ export default function AdminPanel() {
                                                             <button
                                                                 onClick={handleSave}
                                                                 disabled={saving}
-                                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${saving
-                                                                    ? 'bg-gray-400 cursor-not-allowed'
-                                                                    : 'bg-green-600 hover:bg-green-700'
+                                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
                                                                     } text-white`}
-                                                                title={saving ? "Salvando..." : "Salvar"}
                                                             >
                                                                 {saving ? (
-                                                                    <>
-                                                                        <RefreshCw size={16} className="animate-spin" />
-                                                                        <span className="text-xs">Salvando...</span>
-                                                                    </>
+                                                                    <RefreshCw size={16} className="animate-spin" />
                                                                 ) : (
                                                                     <Save size={16} />
                                                                 )}
@@ -476,7 +717,6 @@ export default function AdminPanel() {
                                                             <button
                                                                 onClick={handleCancel}
                                                                 className="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                                                                title="Cancelar"
                                                             >
                                                                 <X size={16} />
                                                             </button>
@@ -536,7 +776,7 @@ export default function AdminPanel() {
 
                 {/* Footer Info */}
                 <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>Mostrando {filteredUsers.length} de {users.length} usuários</p>
+                    <p>Mostrando {filteredUsers.length} de {users.length} usuários • Atualização em tempo real ativa</p>
                 </div>
             </div>
         </div>

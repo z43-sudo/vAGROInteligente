@@ -29,6 +29,7 @@ import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import News from './pages/News';
 import AdminPanel from './pages/AdminPanel';
+import Partners from './pages/Partners';
 
 function App() {
   return (
@@ -197,6 +198,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <AdminPanel />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/parceiros" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Partners />
                 </Layout>
               </ProtectedRoute>
             } />

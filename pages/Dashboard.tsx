@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sprout, TrendingUp, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon } from 'lucide-react';
+import { Sprout, TrendingUp, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon, Trash2, AlertCircle } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import { Crop, Machine } from '../types';
 import { generateFarmInsight } from '../services/geminiService';
@@ -10,10 +10,12 @@ import { useGeolocation } from '../hooks/useGeolocation';
 import { getCurrentWeather, WeatherData } from '../services/weatherService';
 
 const Dashboard: React.FC = () => {
-  const { activities, machines: fleetFromContext, currentUser, crops } = useApp();
+  const { activities, machines: fleetFromContext, currentUser, crops, clearAllData } = useApp();
   const [insight, setInsight] = useState<string>('');
   const { location, error: geoError, loading: geoLoading } = useGeolocation();
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -87,6 +89,19 @@ const Dashboard: React.FC = () => {
 
   // Usar máquinas do contexto se houver, senão array vazio
   const fleet: Machine[] = fleetFromContext.length > 0 ? fleetFromContext : [];
+
+  const handleClearData = async () => {
+    setIsClearing(true);
+    try {
+      await clearAllData();
+      setShowClearModal(false);
+      alert('✅ Todos os dados foram limpos com sucesso!');
+    } catch (error) {
+      alert('❌ Erro ao limpar dados. Tente novamente.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -330,6 +345,13 @@ const Dashboard: React.FC = () => {
                 <Truck size={20} className="text-green-700" />
                 <span className="text-xs font-semibold">Transporte</span>
               </Link>
+              <button
+                onClick={() => setShowClearModal(true)}
+                className="bg-white hover:bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors col-span-2"
+              >
+                <Trash2 size={20} />
+                <span className="text-xs font-semibold">Limpar Dados</span>
+              </button>
             </div>
           </div>
 
@@ -370,6 +392,63 @@ const Dashboard: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Modal de Confirmação de Limpeza */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-100 p-3 rounded-full">
+                <AlertCircle size={24} className="text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800">Limpar Todos os Dados?</h3>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+              <p className="text-sm text-red-800 font-semibold mb-2">⚠️ ATENÇÃO: Esta ação é irreversível!</p>
+              <p className="text-sm text-red-700">
+                Todos os seus dados serão permanentemente deletados:
+              </p>
+              <ul className="text-sm text-red-700 mt-2 space-y-1 ml-4">
+                <li>• Todas as atividades</li>
+                <li>• Todas as safras</li>
+                <li>• Todas as máquinas</li>
+                <li>• Todo o gado/pecuária</li>
+                <li>• Todo o estoque</li>
+                <li>• Todos os membros da equipe</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                disabled={isClearing}
+                className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleClearData}
+                disabled={isClearing}
+                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isClearing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Limpando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={18} />
+                    Sim, Limpar Tudo
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating WhatsApp Button */}
       <WhatsAppButton />
     </div>

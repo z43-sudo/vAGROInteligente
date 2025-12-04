@@ -43,6 +43,7 @@ interface AppContextType {
     updateFarmDetails: (details: { name?: string; cnpj?: string; address?: string; coordinates?: string }) => void;
     notifications: Notification[];
     markAllNotificationsAsRead: () => void;
+    clearAllData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -445,6 +446,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
+    const clearAllData = async () => {
+        if (!supabase || !currentUser.farm_id) return;
+
+        try {
+            const userFarmId = currentUser.farm_id;
+
+            // Deletar do Supabase
+            await Promise.all([
+                supabase.from('activities').delete().eq('farm_id', userFarmId),
+                supabase.from('crops').delete().eq('farm_id', userFarmId),
+                supabase.from('machines').delete().eq('farm_id', userFarmId),
+                supabase.from('livestock').delete().eq('farm_id', userFarmId),
+                supabase.from('inventory_items').delete().eq('farm_id', userFarmId),
+                supabase.from('team_members').delete().eq('farm_id', userFarmId),
+            ]);
+
+            // Limpar estado local
+            setActivities([]);
+            setCrops([]);
+            setMachines([]);
+            setLivestock([]);
+            setInventoryItems([]);
+            setTeamMembers([]);
+
+            console.log('✅ Todos os dados foram limpos com sucesso!');
+        } catch (error) {
+            console.error('❌ Erro ao limpar dados:', error);
+            throw error;
+        }
+    };
+
     return (
         <AppContext.Provider
             value={{
@@ -473,7 +505,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 closeMobileMenu,
                 darkMode, toggleDarkMode,
                 farmDetails, updateFarmDetails,
-                notifications, markAllNotificationsAsRead
+                notifications, markAllNotificationsAsRead,
+                clearAllData
             }}
         >
             {children}

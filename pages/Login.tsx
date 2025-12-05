@@ -10,7 +10,7 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
-    // const { signIn } = useAuth(); // We can use supabase directly or expose signIn from context
+    const { signIn } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,12 +18,7 @@ export default function Login() {
         setError(null);
 
         try {
-            if (!supabase) throw new Error('Supabase client not initialized');
-
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
+            const { error } = await signIn(email, password);
 
             if (error) throw error;
 
@@ -38,15 +33,7 @@ export default function Login() {
     return (
         <div className="min-h-screen bg-[#0f172a] flex items-center justify-center relative overflow-hidden font-sans">
             {/* Background 3D Elements (CSS Only) */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-green-500/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
-
-                {/* Floating "3D" Cubes/Shapes */}
-                <div className="absolute top-20 left-20 w-16 h-16 border border-green-500/30 rounded-xl transform rotate-12 animate-bounce duration-[3000ms] opacity-50 backdrop-blur-sm shadow-[0_0_15px_rgba(34,197,94,0.2)]"></div>
-                <div className="absolute bottom-40 right-20 w-24 h-24 border border-emerald-500/20 rounded-full transform -rotate-12 animate-bounce duration-[4000ms] delay-500 opacity-40 backdrop-blur-sm"></div>
-                <div className="absolute top-1/2 left-10 w-12 h-12 bg-gradient-to-br from-green-500/20 to-transparent rounded-lg transform rotate-45 animate-spin duration-[10000ms] opacity-30"></div>
-            </div>
+            {/* Background Elements removed for cleaner look */}
 
             <div className="w-full max-w-md z-10 p-4">
                 <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-all duration-300">

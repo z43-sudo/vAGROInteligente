@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { Leaf, Tractor, Lock, Mail, ArrowRight, Loader2, User, Users, Building2 } from 'lucide-react';
 
@@ -12,6 +13,7 @@ export default function Signup() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
+    const { signUp } = useAuth();
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,8 +21,6 @@ export default function Signup() {
         setError(null);
 
         try {
-            if (!supabase) throw new Error('Supabase client not initialized');
-
             let finalFarmId = '';
 
             if (isOwner) {
@@ -32,16 +32,10 @@ export default function Signup() {
                 finalFarmId = farmCode.trim();
             }
 
-            const { error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        full_name: fullName,
-                        farm_id: finalFarmId,
-                        role: isOwner ? 'owner' : 'member' // Salvar o papel do usuário
-                    },
-                },
+            const { error } = await signUp(email, password, {
+                full_name: fullName,
+                farm_id: finalFarmId,
+                role: isOwner ? 'owner' : 'member' // Salvar o papel do usuário
             });
 
             if (error) throw error;

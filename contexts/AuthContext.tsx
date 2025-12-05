@@ -7,6 +7,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, data?: any) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,8 +20,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
-        setLoading(false);
-        return;
+      console.warn('Supabase not initialized. Using Mock Auth mode.');
+      // Check if we have a mock session in localStorage
+      const mockSession = localStorage.getItem('mock_session');
+      if (mockSession) {
+        const parsed = JSON.parse(mockSession);
+        setSession(parsed);
+        setUser(parsed.user);
+      }
+      setLoading(false);
+      return;
     }
 
     // Check active sessions and sets the user
@@ -41,10 +51,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => {
-    if (supabase) {
-        await supabase.auth.signOut();
+  const signIn = async (email: string, password: string) => {
+    if (!supabase) {
+      // Mock Login
+      const mockUser: User = {
+        id: 'mock-user-id',
+        app_metadata: {},
+        user_metadata: { full_name: 'Usuário Demo' },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+        email: email,
+        phone: '',
+        role: 'authenticated',
+        updated_at: new Date().toISOString()
+      };
+
+      const mockSession: Session = {
+        access_token: 'mock-token',
+        refresh_token: 'mock-refresh-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: mockUser
+      };
+
+      localStorage.setItem('mock_session', JSON.stringify(mockSession));
+      setSession(mockSession);
+      setUser(mockUser);
+      return { error: null };
     }
+
+    return await supabase.auth.signInWithPassword({ email, password });
+  };
+
+  const signUp = async (email: string, password: string, data?: any) => {
+    if (!supabase) {
+      // Mock Signup - just log them in immediately
+      return signIn(email, password);
+    }
+
+    return await supabase.auth.signUp({
+      email,
+      password,
+      options: { data }
+    });
+  };
+
+  const signOut = async () => {
+    if (!supabase) {
+      localStorage.removeItem('mock_session');
+      setSession(null);
+      setUser(null);
+      return;
+    }
+    await supabase.auth.signOut();
   };
 
   const value = {
@@ -52,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     signOut,
+    signIn,
+    signUp
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

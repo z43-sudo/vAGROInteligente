@@ -54,10 +54,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     if (!supabase) {
       // Mock Login
+      // FIX: Generate a unique ID based on email to ensure data isolation in mock mode
+      const mockUserId = `mock-user-${email.replace(/[^a-zA-Z0-9]/g, '')}`;
+
       const mockUser: User = {
-        id: 'mock-user-id',
+        id: mockUserId,
         app_metadata: {},
-        user_metadata: { full_name: 'Usuário Demo' },
+        user_metadata: {
+          full_name: 'Usuário Demo',
+          farm_id: `farm-${mockUserId}` // Explicitly set farm_id for isolation
+        },
         aud: 'authenticated',
         created_at: new Date().toISOString(),
         email: email,

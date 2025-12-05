@@ -394,8 +394,8 @@ export default function AdminPanel() {
                         <div className="flex items-center gap-3">
                             {/* Sync Status Indicator */}
                             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${syncStatus === 'synced' ? 'bg-green-50 text-green-700' :
-                                    syncStatus === 'syncing' ? 'bg-blue-50 text-blue-700' :
-                                        'bg-red-50 text-red-700'
+                                syncStatus === 'syncing' ? 'bg-blue-50 text-blue-700' :
+                                    'bg-red-50 text-red-700'
                                 }`}>
                                 <Activity size={16} className={syncStatus === 'syncing' ? 'animate-pulse' : ''} />
                                 <span className="text-xs font-medium">

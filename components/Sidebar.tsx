@@ -23,7 +23,18 @@ const Sidebar: React.FC = () => {
         return;
       }
 
+      // Mock Admin Access for specific user
+      if (user.email === 'wallisom_53@outlook.com') {
+        setIsAdmin(true);
+        return;
+      }
+
       try {
+        if (!supabase) {
+          setIsAdmin(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('admin_users')
           .select('*')

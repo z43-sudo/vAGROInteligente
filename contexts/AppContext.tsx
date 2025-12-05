@@ -150,11 +150,83 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const [farmDetails, setFarmDetails] = useState({
-        name: 'Carregando...',
+        name: '',
         cnpj: '',
         address: '',
         coordinates: ''
     });
+
+    // ============================================================================
+    // FUNÇÕES PRINCIPAIS (Definidas antes do uso)
+    // ============================================================================
+
+    const fetchData = async () => {
+        if (!supabase || !currentUser.farm_id) return;
+        // Proteção extra: não buscar se for ID padrão antigo ou vazio
+        if (currentUser.farm_id.startsWith('default-farm-')) return;
+
+        try {
+            const userFarmId = currentUser.farm_id;
+
+            const { data: activitiesData } = await supabase.from('activities').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (activitiesData) setActivities(activitiesData as Activity[]);
+
+            const { data: inventoryData } = await supabase.from('inventory_items').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (inventoryData) setInventoryItems(inventoryData as InventoryItem[]);
+
+            const { data: machinesData } = await supabase.from('machines').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (machinesData) setMachines(machinesData as Machine[]);
+
+            const { data: livestockData } = await supabase.from('livestock').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (livestockData) setLivestock(livestockData as Livestock[]);
+
+            const { data: teamData } = await supabase.from('team_members').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (teamData) setTeamMembers(teamData as TeamMember[]);
+
+            const { data: cropsData } = await supabase.from('crops').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
+            if (cropsData) {
+                const updatedCrops = (cropsData as Crop[]).map(crop => calculateCropStatus(crop));
+                setCrops(updatedCrops);
+            }
+
+        } catch (error) {
+            console.error('Error fetching data from Supabase:', error);
+        }
+    };
+
+    const fetchUser = async () => {
+        if (!supabase) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const farmId = user.user_metadata?.farm_id || 'farm-' + user.id;
+            setCurrentUser(prev => ({
+                ...prev,
+                email: user.email || prev.email,
+                name: user.user_metadata?.full_name || 'Usuário',
+                farm_id: farmId,
+                role: user.user_metadata?.role || 'Proprietário'
+            }));
+
+            // Carregar dados específicos deste usuário do localStorage
+            const storageKey = `farmDetails_${farmId}`;
+            const savedFarmDetails = localStorage.getItem(storageKey);
+            if (savedFarmDetails) {
+                setFarmDetails(JSON.parse(savedFarmDetails));
+            } else {
+                // Se não tiver dados salvos, usar nome do usuário como padrão
+                setFarmDetails({
+                    name: user.user_metadata?.full_name || 'Minha Fazenda',
+                    cnpj: '',
+                    address: '',
+                    coordinates: ''
+                });
+            }
+        }
+    };
+
+    // ============================================================================
+    // EFEITOS (Lógica de Autenticação e Carregamento)
+    // ============================================================================
 
     useEffect(() => {
         if (darkMode) {
@@ -165,23 +237,116 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         localStorage.setItem('darkMode', darkMode.toString());
     }, [darkMode]);
 
-    const toggleDarkMode = () => {
-        setDarkMode(prev => !prev);
-    };
+    // Auth Listener & Initial Load
+    useEffect(() => {
+        if (!supabase) return;
 
-    const updateFarmDetails = (details: Partial<typeof farmDetails>) => {
-        setFarmDetails(prev => {
-            const newDetails = { ...prev, ...details };
-            // Salvar com chave específica do usuário
-            if (currentUser.farm_id) {
-                const storageKey = `farmDetails_${currentUser.farm_id}`;
-                localStorage.setItem(storageKey, JSON.stringify(newDetails));
+        // 1. Verificar sessão atual
+        fetchUser();
+
+        // 2. Ouvir mudanças de autenticação (Login/Logout)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log(`🔐 Auth Event: ${event}`);
+
+            if (event === 'SIGNED_IN' && session?.user) {
+                const user = session.user;
+                const farmId = user.user_metadata?.farm_id || 'farm-' + user.id;
+
+                console.log('👤 Usuário logado:', user.email, 'Farm ID:', farmId);
+
+                setCurrentUser(prev => ({
+                    ...prev,
+                    email: user.email || prev.email,
+                    name: user.user_metadata?.full_name || 'Usuário',
+                    farm_id: farmId,
+                    role: user.user_metadata?.role || 'Proprietário'
+                }));
             }
-            return newDetails;
+            else if (event === 'SIGNED_OUT') {
+                console.log('👋 Usuário deslogado');
+                setCurrentUser({
+                    name: 'Usuário',
+                    role: 'Proprietário',
+                    email: '',
+                    farm_id: ''
+                });
+                // Limpar estados locais
+                setActivities([]);
+                setInventoryItems([]);
+                setMachines([]);
+                setLivestock([]);
+                setTeamMembers([]);
+                setCrops([]);
+            }
         });
-    };
 
-    // Intelligent Notifications Logic
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    // Carregar Cache + Sincronizar quando farm_id mudar
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '' && !currentUser.farm_id.startsWith('default-')) {
+            // 1. CARREGAR DO CACHE IMEDIATAMENTE (velocidade)
+            console.log('📦 Carregando dados do cache...');
+            const cachedActivities = loadFromCache(currentUser.farm_id, 'activities');
+            const cachedInventory = loadFromCache(currentUser.farm_id, 'inventory');
+            const cachedMachines = loadFromCache(currentUser.farm_id, 'machines');
+            const cachedLivestock = loadFromCache(currentUser.farm_id, 'livestock');
+            const cachedTeam = loadFromCache(currentUser.farm_id, 'team');
+            const cachedCrops = loadFromCache(currentUser.farm_id, 'crops');
+
+            if (cachedActivities.length > 0) setActivities(cachedActivities);
+            if (cachedInventory.length > 0) setInventoryItems(cachedInventory);
+            if (cachedMachines.length > 0) setMachines(cachedMachines);
+            if (cachedLivestock.length > 0) setLivestock(cachedLivestock);
+            if (cachedTeam.length > 0) setTeamMembers(cachedTeam);
+            if (cachedCrops.length > 0) setCrops(cachedCrops);
+
+            // 2. SINCRONIZAR COM SUPABASE EM BACKGROUND
+            fetchData();
+        }
+    }, [currentUser.farm_id]);
+
+    // Auto-Save Effects
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'activities', activities);
+        }
+    }, [activities, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'inventory', inventoryItems);
+        }
+    }, [inventoryItems, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'machines', machines);
+        }
+    }, [machines, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'livestock', livestock);
+        }
+    }, [livestock, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'team', teamMembers);
+        }
+    }, [teamMembers, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'crops', crops);
+        }
+    }, [crops, currentUser.farm_id]);
+
+    // Notifications Logic
     useEffect(() => {
         const generateNotifications = () => {
             const newNotifications: Notification[] = [];
@@ -248,146 +413,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         generateNotifications();
     }, [inventoryItems, machines, livestock, activities]);
 
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+
+    const toggleDarkMode = () => {
+        setDarkMode(prev => !prev);
+    };
+
+    const updateFarmDetails = (details: Partial<typeof farmDetails>) => {
+        setFarmDetails(prev => {
+            const newDetails = { ...prev, ...details };
+            // Salvar com chave específica do usuário
+            if (currentUser.farm_id) {
+                const storageKey = `farmDetails_${currentUser.farm_id}`;
+                localStorage.setItem(storageKey, JSON.stringify(newDetails));
+            }
+            return newDetails;
+        });
+    };
+
     const markAllNotificationsAsRead = () => {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    };
-
-    // ============================================================================
-    // AUTO-SAVE: Salvar no cache sempre que os dados mudarem
-    // ============================================================================
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'activities', activities);
-        }
-    }, [activities, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'inventory', inventoryItems);
-        }
-    }, [inventoryItems, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'machines', machines);
-        }
-    }, [machines, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'livestock', livestock);
-        }
-    }, [livestock, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'team', teamMembers);
-        }
-    }, [teamMembers, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            saveToCache(currentUser.farm_id, 'crops', crops);
-        }
-    }, [crops, currentUser.farm_id]);
-
-    useEffect(() => {
-        if (supabase) {
-            fetchUser();
-        }
-    }, []);
-
-    // ============================================================================
-    // CARREGAR CACHE + SINCRONIZAR: farm_id mudou
-    // ============================================================================
-    useEffect(() => {
-        if (currentUser.farm_id && currentUser.farm_id !== '') {
-            // 1. CARREGAR DO CACHE IMEDIATAMENTE (velocidade)
-            console.log('📦 Carregando dados do cache...');
-            const cachedActivities = loadFromCache(currentUser.farm_id, 'activities');
-            const cachedInventory = loadFromCache(currentUser.farm_id, 'inventory');
-            const cachedMachines = loadFromCache(currentUser.farm_id, 'machines');
-            const cachedLivestock = loadFromCache(currentUser.farm_id, 'livestock');
-            const cachedTeam = loadFromCache(currentUser.farm_id, 'team');
-            const cachedCrops = loadFromCache(currentUser.farm_id, 'crops');
-
-            if (cachedActivities.length > 0) setActivities(cachedActivities);
-            if (cachedInventory.length > 0) setInventoryItems(cachedInventory);
-            if (cachedMachines.length > 0) setMachines(cachedMachines);
-            if (cachedLivestock.length > 0) setLivestock(cachedLivestock);
-            if (cachedTeam.length > 0) setTeamMembers(cachedTeam);
-            if (cachedCrops.length > 0) setCrops(cachedCrops);
-
-            // 2. SINCRONIZAR COM SUPABASE EM BACKGROUND
-            if (supabase) {
-                fetchData();
-            }
-        }
-    }, [currentUser.farm_id]);
-
-    const fetchUser = async () => {
-        if (!supabase) return;
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const farmId = user.user_metadata?.farm_id || 'farm-' + user.id;
-            setCurrentUser(prev => ({
-                ...prev,
-                email: user.email || prev.email,
-                name: user.user_metadata?.full_name || 'Usuário',
-                farm_id: farmId,
-                role: user.user_metadata?.role || 'Proprietário'
-            }));
-
-            // Carregar dados específicos deste usuário do localStorage
-            const storageKey = `farmDetails_${farmId}`;
-            const savedFarmDetails = localStorage.getItem(storageKey);
-            if (savedFarmDetails) {
-                setFarmDetails(JSON.parse(savedFarmDetails));
-            } else {
-                // Se não tiver dados salvos, usar nome do usuário como padrão
-                setFarmDetails({
-                    name: user.user_metadata?.full_name || 'Minha Fazenda',
-                    cnpj: '',
-                    address: '',
-                    coordinates: ''
-                });
-            }
-        }
-    };
-
-    const fetchData = async () => {
-        if (!supabase || !currentUser.farm_id) return;
-
-        // Proteção extra: não buscar se for ID padrão antigo ou vazio
-        if (currentUser.farm_id.startsWith('default-farm-')) return;
-
-        try {
-            const userFarmId = currentUser.farm_id;
-
-            const { data: activitiesData } = await supabase.from('activities').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (activitiesData) setActivities(activitiesData as Activity[]);
-
-            const { data: inventoryData } = await supabase.from('inventory_items').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (inventoryData) setInventoryItems(inventoryData as InventoryItem[]);
-
-            const { data: machinesData } = await supabase.from('machines').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (machinesData) setMachines(machinesData as Machine[]);
-
-            const { data: livestockData } = await supabase.from('livestock').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (livestockData) setLivestock(livestockData as Livestock[]);
-
-            const { data: teamData } = await supabase.from('team_members').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (teamData) setTeamMembers(teamData as TeamMember[]);
-
-            const { data: cropsData } = await supabase.from('crops').select('*').eq('farm_id', userFarmId).order('created_at', { ascending: false });
-            if (cropsData) {
-                const updatedCrops = (cropsData as Crop[]).map(crop => calculateCropStatus(crop));
-                setCrops(updatedCrops);
-            }
-
-        } catch (error) {
-            console.error('Error fetching data from Supabase:', error);
-        }
     };
 
     const addActivity = async (activity: Omit<Activity, 'id' | 'time'>) => {
@@ -403,13 +450,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('activities').insert([newActivity]);
                 if (error) {
                     console.error('❌ Erro ao salvar atividade no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Atividade salva com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };
@@ -426,13 +471,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('inventory_items').insert([newItem]);
                 if (error) {
                     console.error('❌ Erro ao salvar item no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Item salvo com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };
@@ -445,13 +488,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('machines').insert([machineWithFarm]);
                 if (error) {
                     console.error('❌ Erro ao salvar máquina no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Máquina salva com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };
@@ -464,13 +505,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('livestock').insert([animalWithFarm]);
                 if (error) {
                     console.error('❌ Erro ao salvar animal no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Animal salvo com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };
@@ -483,13 +522,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('team_members').insert([memberWithFarm]);
                 if (error) {
                     console.error('❌ Erro ao salvar membro no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Membro salvo com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };
@@ -503,13 +540,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const { error } = await supabase.from('crops').insert([updatedCrop]);
                 if (error) {
                     console.error('❌ Erro ao salvar safra no Supabase:', error);
-                    // Mantém localmente mesmo com erro
                 } else {
                     console.log('✅ Safra salva com sucesso!');
                 }
             } catch (err) {
                 console.error('❌ Erro inesperado:', err);
-                // Mantém localmente mesmo com erro
             }
         }
     };

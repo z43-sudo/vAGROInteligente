@@ -80,6 +80,52 @@ const calculateCropStatus = (crop: Crop): Crop => {
     };
 };
 
+// ============================================================================
+// FUNÇÕES DE CACHE PERSISTENTE (localStorage)
+// ============================================================================
+const CACHE_VERSION = '1.0';
+
+// Salvar dados no cache (localStorage) com chave específica do farm_id
+const saveToCache = (farmId: string, dataType: string, data: any) => {
+    try {
+        const cacheKey = `agro_cache_${farmId}_${dataType}_v${CACHE_VERSION}`;
+        localStorage.setItem(cacheKey, JSON.stringify({
+            data,
+            timestamp: new Date().toISOString(),
+            version: CACHE_VERSION
+        }));
+    } catch (error) {
+        console.warn('⚠️ Erro ao salvar no cache:', error);
+    }
+};
+
+// Carregar dados do cache
+const loadFromCache = (farmId: string, dataType: string): any[] => {
+    try {
+        const cacheKey = `agro_cache_${farmId}_${dataType}_v${CACHE_VERSION}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            console.log(`✅ Dados ${dataType} carregados do cache`);
+            return parsed.data || [];
+        }
+    } catch (error) {
+        console.warn(`⚠️ Erro ao carregar ${dataType} do cache:`, error);
+    }
+    return [];
+};
+
+// Limpar cache específico de um usuário
+const clearUserCache = (farmId: string) => {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+        if (key.startsWith(`agro_cache_${farmId}_`)) {
+            localStorage.removeItem(key);
+        }
+    });
+    console.log('🗑️ Cache do usuário limpo');
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
@@ -206,16 +252,76 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     };
 
+    // ============================================================================
+    // AUTO-SAVE: Salvar no cache sempre que os dados mudarem
+    // ============================================================================
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'activities', activities);
+        }
+    }, [activities, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'inventory', inventoryItems);
+        }
+    }, [inventoryItems, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'machines', machines);
+        }
+    }, [machines, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'livestock', livestock);
+        }
+    }, [livestock, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'team', teamMembers);
+        }
+    }, [teamMembers, currentUser.farm_id]);
+
+    useEffect(() => {
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            saveToCache(currentUser.farm_id, 'crops', crops);
+        }
+    }, [crops, currentUser.farm_id]);
+
     useEffect(() => {
         if (supabase) {
             fetchUser();
         }
     }, []);
 
-    // Fetch data only after user is loaded and has a farm_id
+    // ============================================================================
+    // CARREGAR CACHE + SINCRONIZAR: farm_id mudou
+    // ============================================================================
     useEffect(() => {
-        if (currentUser.farm_id) {
-            fetchData();
+        if (currentUser.farm_id && currentUser.farm_id !== '') {
+            // 1. CARREGAR DO CACHE IMEDIATAMENTE (velocidade)
+            console.log('📦 Carregando dados do cache...');
+            const cachedActivities = loadFromCache(currentUser.farm_id, 'activities');
+            const cachedInventory = loadFromCache(currentUser.farm_id, 'inventory');
+            const cachedMachines = loadFromCache(currentUser.farm_id, 'machines');
+            const cachedLivestock = loadFromCache(currentUser.farm_id, 'livestock');
+            const cachedTeam = loadFromCache(currentUser.farm_id, 'team');
+            const cachedCrops = loadFromCache(currentUser.farm_id, 'crops');
+
+            if (cachedActivities.length > 0) setActivities(cachedActivities);
+            if (cachedInventory.length > 0) setInventoryItems(cachedInventory);
+            if (cachedMachines.length > 0) setMachines(cachedMachines);
+            if (cachedLivestock.length > 0) setLivestock(cachedLivestock);
+            if (cachedTeam.length > 0) setTeamMembers(cachedTeam);
+            if (cachedCrops.length > 0) setCrops(cachedCrops);
+
+            // 2. SINCRONIZAR COM SUPABASE EM BACKGROUND
+            if (supabase) {
+                fetchData();
+            }
         }
     }, [currentUser.farm_id]);
 
@@ -451,20 +557,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
     const clearAllData = async () => {
-        if (!supabase || !currentUser.farm_id) return;
+        if (!currentUser.farm_id) return;
 
         try {
             const userFarmId = currentUser.farm_id;
 
-            // Deletar do Supabase
-            await Promise.all([
-                supabase.from('activities').delete().eq('farm_id', userFarmId),
-                supabase.from('crops').delete().eq('farm_id', userFarmId),
-                supabase.from('machines').delete().eq('farm_id', userFarmId),
-                supabase.from('livestock').delete().eq('farm_id', userFarmId),
-                supabase.from('inventory_items').delete().eq('farm_id', userFarmId),
-                supabase.from('team_members').delete().eq('farm_id', userFarmId),
-            ]);
+            // Limpar do Supabase (se disponível)
+            if (supabase) {
+                await Promise.all([
+                    supabase.from('activities').delete().eq('farm_id', userFarmId),
+                    supabase.from('crops').delete().eq('farm_id', userFarmId),
+                    supabase.from('machines').delete().eq('farm_id', userFarmId),
+                    supabase.from('livestock').delete().eq('farm_id', userFarmId),
+                    supabase.from('inventory_items').delete().eq('farm_id', userFarmId),
+                    supabase.from('team_members').delete().eq('farm_id', userFarmId),
+                ]);
+            }
 
             // Limpar estado local
             setActivities([]);
@@ -474,7 +582,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setInventoryItems([]);
             setTeamMembers([]);
 
-            console.log('✅ Todos os dados foram limpos com sucesso!');
+            // 🆕 LIMPAR CACHE localStorage
+            clearUserCache(userFarmId);
+
+            console.log('✅ Todos os dados foram limpos com sucesso (incluindo cache)!');
         } catch (error) {
             console.error('❌ Erro ao limpar dados:', error);
             throw error;

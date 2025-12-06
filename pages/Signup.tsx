@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../services/supabaseClient';
-import { Leaf, Tractor, Lock, Mail, ArrowRight, Loader2, User, Users, Building2 } from 'lucide-react';
+import { Leaf, User, Lock, Mail, ArrowRight, Loader2, Users, Building2 } from 'lucide-react';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
@@ -51,26 +50,24 @@ export default function Signup() {
 
     return (
         <div className="min-h-screen bg-[#0f172a] flex items-center justify-center relative overflow-hidden font-sans">
-            {/* Background 3D Elements (CSS Only) */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-green-500/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
+            {/* Ambient Background Glows */}
+            <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-green-500/10 rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-                <div className="absolute top-20 right-20 w-16 h-16 border border-green-500/30 rounded-xl transform -rotate-12 animate-bounce duration-[3000ms] opacity-50 backdrop-blur-sm shadow-[0_0_15px_rgba(34,197,94,0.2)]"></div>
-                <div className="absolute bottom-40 left-20 w-24 h-24 border border-emerald-500/20 rounded-full transform rotate-12 animate-bounce duration-[4000ms] delay-500 opacity-40 backdrop-blur-sm"></div>
-            </div>
+            <div className="w-full max-w-[450px] z-10 px-4">
+                <div className="relative bg-slate-900/60 backdrop-blur-2xl border border-slate-700/50 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.3)] overflow-hidden">
 
-            <div className="w-full max-w-md z-10 p-4">
-                <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-all duration-300">
+                    {/* Top Gradient Line Accent */}
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent opacity-70" />
 
                     {/* Header Section */}
-                    <div className="relative h-24 bg-gradient-to-br from-green-900 to-[#0f172a] flex items-center justify-center overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-overlay"></div>
-                        <div className="relative z-10 flex items-center gap-3">
-                            <div className="bg-green-500/20 p-2 rounded-full border border-green-500/30">
+                    <div className="pt-8 pb-6 px-8 border-b border-slate-700/30 bg-[#0f172a]/30">
+                        <div className="flex flex-col items-center">
+                            <div className="bg-green-500/10 p-3 rounded-full border border-green-500/20 mb-3 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
                                 <Leaf className="w-6 h-6 text-green-400" />
                             </div>
-                            <h2 className="text-xl font-bold text-white tracking-wide">Criar Nova Conta</h2>
+                            <h2 className="text-xl font-bold text-white tracking-tight">Nova Conta Corporativa</h2>
+                            <p className="text-slate-400 text-xs mt-1 font-medium tracking-wide">Junte-se à gestão inteligente</p>
                         </div>
                     </div>
 
@@ -78,98 +75,98 @@ export default function Signup() {
                     <div className="p-8">
 
                         {error && (
-                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
+                            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium text-center flex items-center justify-center gap-2 animate-fade-in">
+                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
                                 {error}
                             </div>
                         )}
 
                         <form onSubmit={handleSignup} className="space-y-4">
 
-                            {/* Toggle Dono / Membro */}
-                            <div className="flex bg-[#0f172a]/50 p-1 rounded-xl border border-gray-700 mb-4">
+                            {/* Type Toggle - Glass Style */}
+                            <div className="p-1 bg-slate-950/50 rounded-xl border border-slate-700/50 flex mb-6 relative">
                                 <button
                                     type="button"
                                     onClick={() => setIsOwner(true)}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${isOwner ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                                    className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 ${isOwner ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    <Building2 size={16} />
-                                    Sou Dono
+                                    <Building2 size={14} />
+                                    EMPRESA / DONO
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsOwner(false)}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${!isOwner ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                                    className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 ${!isOwner ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    <Users size={16} />
-                                    Sou Equipe
+                                    <Users size={14} />
+                                    COLABORADOR
                                 </button>
+                                {/* Sliding Background */}
+                                <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-slate-700 rounded-lg transition-all duration-300 ease-out border border-slate-600 ${isOwner ? 'left-1' : 'left-[calc(50%+4px)]'}`} />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm text-gray-400 ml-1">Nome Completo</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <User className="h-5 w-5 text-gray-500 group-focus-within:text-green-400 transition-colors" />
+                            <div className="space-y-1.5 group/input">
+                                <div className="relative">
+                                    <div className="absolute top-1/2 -translate-y-1/2 left-3.5 text-slate-500 group-focus-within/input:text-green-400 transition-colors">
+                                        <User size={18} />
                                     </div>
                                     <input
                                         type="text"
                                         required
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-3 bg-[#0f172a]/50 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
-                                        placeholder="Seu nome"
+                                        className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-green-500/50 focus:bg-slate-900/80 focus:ring-2 focus:ring-green-500/10 transition-all duration-300"
+                                        placeholder="Nome completo"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm text-gray-400 ml-1">Email Corporativo</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-gray-500 group-focus-within:text-green-400 transition-colors" />
+                            <div className="space-y-1.5 group/input">
+                                <div className="relative">
+                                    <div className="absolute top-1/2 -translate-y-1/2 left-3.5 text-slate-500 group-focus-within/input:text-green-400 transition-colors">
+                                        <Mail size={18} />
                                     </div>
                                     <input
                                         type="email"
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-3 bg-[#0f172a]/50 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
-                                        placeholder="seu@email.com"
+                                        className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-green-500/50 focus:bg-slate-900/80 focus:ring-2 focus:ring-green-500/10 transition-all duration-300"
+                                        placeholder="Email corporativo"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm text-gray-400 ml-1">Senha</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-gray-500 group-focus-within:text-green-400 transition-colors" />
+                            <div className="space-y-1.5 group/input">
+                                <div className="relative">
+                                    <div className="absolute top-1/2 -translate-y-1/2 left-3.5 text-slate-500 group-focus-within/input:text-green-400 transition-colors">
+                                        <Lock size={18} />
                                     </div>
                                     <input
                                         type="password"
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-3 bg-[#0f172a]/50 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
-                                        placeholder="••••••••"
+                                        className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-green-500/50 focus:bg-slate-900/80 focus:ring-2 focus:ring-green-500/10 transition-all duration-300"
+                                        placeholder="Definir senha"
                                     />
                                 </div>
                             </div>
 
                             {!isOwner && (
-                                <div className="space-y-2 animate-fade-in">
-                                    <label className="text-sm text-green-400 ml-1 font-bold">Código da Fazenda (Peça ao Dono)</label>
-                                    <div className="relative group">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Building2 className="h-5 w-5 text-green-500" />
+                                <div className="space-y-1.5 animate-fade-in pt-2">
+                                    <label className="text-[10px] font-bold text-green-500 uppercase tracking-wider ml-1 mb-1 block">Código da Fazenda</label>
+                                    <div className="relative group/code">
+                                        <div className="absolute top-1/2 -translate-y-1/2 left-3.5 text-green-500/70">
+                                            <Building2 size={18} />
                                         </div>
                                         <input
                                             type="text"
                                             required={!isOwner}
                                             value={farmCode}
                                             onChange={(e) => setFarmCode(e.target.value)}
-                                            className="block w-full pl-10 pr-3 py-3 bg-green-900/20 border border-green-500/50 rounded-xl text-green-100 placeholder-green-700/50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                                            placeholder="Ex: farm_123456789"
+                                            className="block w-full pl-11 pr-4 py-3 bg-green-500/5 border border-green-500/30 rounded-xl text-green-100 placeholder-green-700/50 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 transition-all font-mono text-sm tracking-wide"
+                                            placeholder="Ex: farm_123..."
                                         />
                                     </div>
                                 </div>
@@ -178,27 +175,35 @@ export default function Signup() {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-medium rounded-xl shadow-lg shadow-green-900/20 transform active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                                className="w-full relative overflow-hidden group/btn flex items-center justify-center py-3.5 px-4 bg-[#14532d] hover:bg-[#166534] border border-green-600/30 text-white font-semibold rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(22,101,52,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.3)] active:scale-[0.98] mt-4"
                             >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000" />
+
                                 {loading ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <Loader2 className="w-5 h-5 animate-spin text-green-200" />
                                 ) : (
-                                    <>
-                                        {isOwner ? 'Criar Minha Fazenda' : 'Entrar na Equipe'} <ArrowRight className="ml-2 w-4 h-4" />
-                                    </>
+                                    <span className="flex items-center gap-2 relative z-10 text-sm uppercase tracking-wide">
+                                        {isOwner ? 'Criar Fazenda Digital' : 'Solicitar Acesso'} <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                                    </span>
                                 )}
                             </button>
                         </form>
 
-                        <div className="mt-6 pt-6 border-t border-white/5 text-center">
-                            <p className="text-gray-400 text-sm">
-                                Já possui uma conta?{' '}
-                                <Link to="/login" className="text-green-400 hover:text-green-300 font-medium transition-colors">
-                                    Fazer Login
+                        <div className="mt-8 text-center pt-6 border-t border-slate-800/50">
+                            <p className="text-slate-500 text-xs">
+                                Já tem sua conta?{' '}
+                                <Link to="/login" className="text-green-400 hover:text-green-300 font-bold transition-colors hover:underline decoration-green-500/30 underline-offset-4 ml-1">
+                                    Fazer login
                                 </Link>
                             </p>
                         </div>
                     </div>
+                </div>
+
+                <div className="mt-8 text-center opacity-40 hover:opacity-100 transition-opacity duration-500">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-white font-light">
+                        Segurança Criptografada
+                    </p>
                 </div>
             </div>
         </div>

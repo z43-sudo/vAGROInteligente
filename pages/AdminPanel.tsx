@@ -28,6 +28,7 @@ export default function AdminPanel() {
     const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Estados de Filtro e Busca
     const [searchTerm, setSearchTerm] = useState('');
@@ -70,17 +71,23 @@ export default function AdminPanel() {
             setIsAdmin(true);
             loadUsers();
         } else {
-            // Verifica no banco se existe na tabela admin_users
-            const { data } = await supabase
-                .from('admin_users')
-                .select('*')
-                .eq('email', user.email)
-                .maybeSingle();
+            try {
+                // Verifica no banco se existe na tabela admin_users
+                const { data } = await supabase
+                    .from('admin_users')
+                    .select('*')
+                    .eq('email', user.email)
+                    .maybeSingle();
 
-            if (data) {
-                setIsAdmin(true);
-                loadUsers();
-            } else {
+                if (data) {
+                    setIsAdmin(true);
+                    loadUsers();
+                } else {
+                    setLoading(false);
+                    setIsAdmin(false);
+                }
+            } catch (err) {
+                console.error('Erro na verificação de admin:', err);
                 setLoading(false);
                 setIsAdmin(false);
             }
@@ -90,6 +97,7 @@ export default function AdminPanel() {
     // 2. Carregar Usuários do Banco
     const loadUsers = async () => {
         setLoading(true);
+        setError(null);
         try {
             const { data, error } = await supabase
                 .from('user_profiles')
@@ -102,9 +110,9 @@ export default function AdminPanel() {
                 setUsers(data as UserProfile[]);
                 calculateStats(data as UserProfile[]);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Erro ao carregar usuários:', err);
-            alert('Erro ao carregar lista de usuários check o console.');
+            setError(err.message || 'Erro desconhecido ao carregar usuários');
         } finally {
             setLoading(false);
         }
@@ -176,7 +184,7 @@ export default function AdminPanel() {
                     role: editForm.role,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', editingId); // Usa o ID da tabela (PK)
+                .eq('id', editingId);
 
             if (error) throw error;
 
@@ -269,6 +277,18 @@ export default function AdminPanel() {
                         <RefreshCw size={18} /> Atualizar Lista
                     </button>
                 </div>
+
+                {/* Error Banner */}
+                {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                        <div>
+                            <p className="font-bold">Falha ao carregar dados:</p>
+                            <p className="text-sm">{error}</p>
+                            <p className="text-xs mt-1 text-red-500">Tente recarregar a página.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

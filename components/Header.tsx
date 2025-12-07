@@ -31,6 +31,11 @@ const Header: React.FC = () => {
           console.error("Erro ao obter localização", error);
           setIsLocating(false);
           alert("Não foi possível obter sua localização. Verifique as permissões do navegador.");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
         }
       );
     } else {

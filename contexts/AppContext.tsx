@@ -12,6 +12,7 @@ interface UserProfile {
 interface AppContextType {
     activities: Activity[];
     addActivity: (activity: Omit<Activity, 'id' | 'time'>) => void;
+    updateActivity: (id: string, updatedData: Partial<Activity>) => void;
     deleteActivity: (id: string) => void;
     inventoryItems: InventoryItem[];
     addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
@@ -437,10 +438,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     };
 
+    // Helper to generate proper UUIDs for Supabase
+    const generateUUID = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    };
+
     const addActivity = async (activity: Omit<Activity, 'id' | 'time'>) => {
         const newActivity: Activity = {
             ...activity,
-            id: Date.now().toString(),
+            id: generateUUID(),
             time: 'Agora mesmo',
             farm_id: currentUser.farm_id
         };
@@ -459,10 +471,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     };
 
+    const updateActivity = async (id: string, updatedData: Partial<Activity>) => {
+        setActivities(prev => prev.map(a => a.id === id ? { ...a, ...updatedData } : a));
+        if (supabase) {
+            try {
+                const { error } = await supabase.from('activities').update(updatedData).eq('id', id);
+                if (error) {
+                    console.error('❌ Erro ao atualizar atividade no Supabase:', error);
+                } else {
+                    console.log('✅ Atividade atualizada com sucesso!');
+                }
+            } catch (err) {
+                console.error('❌ Erro inesperado:', err);
+            }
+        }
+    };
+
     const addInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
         const newItem: InventoryItem = {
             ...item,
-            id: Date.now().toString(),
+            id: generateUUID(),
             farm_id: currentUser.farm_id
         };
         setInventoryItems(prev => [...prev, newItem]);
@@ -481,7 +509,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addMachine = async (machine: Machine) => {
-        const machineWithFarm = { ...machine, farm_id: currentUser.farm_id };
+        const machineWithFarm = { ...machine, id: machine.id || generateUUID(), farm_id: currentUser.farm_id };
         setMachines(prev => [...prev, machineWithFarm]);
         if (supabase) {
             try {
@@ -498,7 +526,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addLivestock = async (animal: Livestock) => {
-        const animalWithFarm = { ...animal, farm_id: currentUser.farm_id };
+        const animalWithFarm = { ...animal, id: animal.id || generateUUID(), farm_id: currentUser.farm_id };
         setLivestock(prev => [...prev, animalWithFarm]);
         if (supabase) {
             try {
@@ -515,7 +543,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addTeamMember = async (member: TeamMember) => {
-        const memberWithFarm = { ...member, farm_id: currentUser.farm_id };
+        const memberWithFarm = { ...member, id: member.id || generateUUID(), farm_id: currentUser.farm_id };
         setTeamMembers(prev => [...prev, memberWithFarm]);
         if (supabase) {
             try {
@@ -532,7 +560,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const addCrop = async (crop: Crop) => {
-        const cropWithFarm = { ...crop, farm_id: currentUser.farm_id };
+        const cropWithFarm = { ...crop, id: crop.id || generateUUID(), farm_id: currentUser.farm_id };
         const updatedCrop = calculateCropStatus(cropWithFarm);
         setCrops(prev => [...prev, updatedCrop]);
         if (supabase) {
@@ -632,6 +660,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             value={{
                 activities,
                 addActivity,
+                updateActivity,
                 deleteActivity,
                 inventoryItems,
                 addInventoryItem,

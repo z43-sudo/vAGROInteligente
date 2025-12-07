@@ -1,10 +1,37 @@
-import React from 'react';
-import { CheckSquare, Clock, AlertCircle, Calendar as CalendarIcon, Filter, Plus, MoreHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckSquare, Clock, AlertCircle, Calendar as CalendarIcon, Filter, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Link } from 'react-router-dom';
+import { Activity } from '../types';
 
 const Activities: React.FC = () => {
-    const { activities } = useApp();
+    const { activities, updateActivity, deleteActivity } = useApp();
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<Partial<Activity>>({});
+
+    const startEditing = (activity: Activity) => {
+        setEditingId(activity.id);
+        setEditForm(activity);
+    };
+
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditForm({});
+    };
+
+    const handleUpdate = async () => {
+        if (editingId && editForm) {
+            await updateActivity(editingId, editForm);
+            setEditingId(null);
+            setEditForm({});
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (confirm('Tem certeza que deseja excluir esta atividade?')) {
+            await deleteActivity(id);
+        }
+    };
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -83,17 +110,98 @@ const Activities: React.FC = () => {
                             {activities.length > 0 ? (
                                 activities.map((activity) => (
                                     <tr key={activity.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-gray-900">{activity.title}</td>
-                                        <td className="px-6 py-4">{activity.type}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded-md text-xs font-semibold ${getStatusColor(activity.status)}`}>
-                                                {activity.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">{activity.time}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal size={18} /></button>
-                                        </td>
+                                        {editingId === activity.id ? (
+                                            <>
+                                                <td className="px-6 py-4">
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.title || ''}
+                                                        onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    />
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <select
+                                                        value={editForm.type}
+                                                        onChange={e => setEditForm({ ...editForm, type: e.target.value as any })}
+                                                        className="border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    >
+                                                        <option value="irrigation">Irrigação</option>
+                                                        <option value="maintenance">Manutenção</option>
+                                                        <option value="alert">Alerta</option>
+                                                        <option value="harvest">Colheita</option>
+                                                        <option value="planting">Plantio</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <select
+                                                        value={editForm.status}
+                                                        onChange={e => setEditForm({ ...editForm, status: e.target.value as any })}
+                                                        className="border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    >
+                                                        <option value="Em andamento">Em andamento</option>
+                                                        <option value="Concluído">Concluído</option>
+                                                        <option value="Urgente">Urgente</option>
+                                                        <option value="Agendado">Agendado</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.time || ''}
+                                                        onChange={e => setEditForm({ ...editForm, time: e.target.value })}
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    />
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={handleUpdate}
+                                                            className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                                            title="Salvar"
+                                                        >
+                                                            <Save size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={cancelEditing}
+                                                            className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                                                            title="Cancelar"
+                                                        >
+                                                            <X size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td className="px-6 py-4 font-medium text-gray-900">{activity.title}</td>
+                                                <td className="px-6 py-4 capitalize">{activity.type === 'irrigation' ? 'Irrigação' : activity.type === 'maintenance' ? 'Manutenção' : activity.type === 'alert' ? 'Alerta' : activity.type === 'harvest' ? 'Colheita' : activity.type}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${getStatusColor(activity.status)}`}>
+                                                        {activity.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">{activity.time}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => startEditing(activity)}
+                                                            className="text-blue-500 hover:text-blue-700 p-1 hover:bg-blue-50 rounded"
+                                                            title="Editar"
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(activity.id)}
+                                                            className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded"
+                                                            title="Excluir"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        )}
                                     </tr>
                                 ))
                             ) : (

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sprout, TrendingUp, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon, Trash2, AlertCircle } from 'lucide-react';
+import { Sprout, TrendingUp, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon, Trash2, AlertCircle, Edit2, Save, X } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
-import { Crop, Machine } from '../types';
+import { Crop, Machine, Activity } from '../types';
 import { generateFarmInsight } from '../services/geminiService';
 import { useApp } from '../contexts/AppContext';
 import WhatsAppButton from '../components/WhatsAppButton';
@@ -10,12 +10,40 @@ import { useGeolocation } from '../hooks/useGeolocation';
 import { getCurrentWeather, WeatherData } from '../services/weatherService';
 
 const Dashboard: React.FC = () => {
-  const { activities, machines: fleetFromContext, currentUser, crops, clearAllData } = useApp();
+  const { activities, updateActivity, deleteActivity, machines: fleetFromContext, currentUser, crops, clearAllData } = useApp();
   const [insight, setInsight] = useState<string>('');
   const { location, error: geoError, loading: geoLoading } = useGeolocation();
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  // Activity Editing State
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [editActivityForm, setEditActivityForm] = useState<Partial<Activity>>({});
+
+  const startEditingActivity = (activity: Activity) => {
+    setEditingActivityId(activity.id);
+    setEditActivityForm(activity);
+  };
+
+  const cancelEditingActivity = () => {
+    setEditingActivityId(null);
+    setEditActivityForm({});
+  };
+
+  const handleUpdateActivity = async () => {
+    if (editingActivityId && editActivityForm) {
+      await updateActivity(editingActivityId, editActivityForm);
+      setEditingActivityId(null);
+      setEditActivityForm({});
+    }
+  };
+
+  const handleDeleteActivity = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir esta atividade?')) {
+      await deleteActivity(id);
+    }
+  };
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -238,7 +266,7 @@ const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 activities.map((activity) => (
-                  <div key={activity.id} className="flex gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors border border-transparent hover:border-gray-100">
+                  <div key={activity.id} className="flex gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors border border-transparent hover:border-gray-100 group">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${activity.type === 'irrigation' ? 'bg-blue-50 text-blue-600' :
                       activity.type === 'maintenance' ? 'bg-green-50 text-green-600' :
                         activity.type === 'alert' ? 'bg-orange-50 text-orange-600' :
@@ -249,13 +277,67 @@ const Dashboard: React.FC = () => {
                       {activity.type === 'alert' && <Bug size={20} />}
                       {activity.type === 'harvest' && <Calendar size={20} />}
                     </div>
+
                     <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-gray-800 text-sm">{activity.title}</h4>
-                        <ActivityBadge status={activity.status} />
-                      </div>
-                      <p className="text-sm text-gray-500 mt-0.5">{activity.description}</p>
-                      <p className="text-xs text-gray-400 mt-2">{activity.time}</p>
+                      {editingActivityId === activity.id ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={editActivityForm.title || ''}
+                            onChange={(e) => setEditActivityForm({ ...editActivityForm, title: e.target.value })}
+                            className="w-full border rounded px-2 py-1 text-sm font-bold text-gray-800"
+                            placeholder="Título"
+                          />
+                          <input
+                            type="text"
+                            value={editActivityForm.description || ''}
+                            onChange={(e) => setEditActivityForm({ ...editActivityForm, description: e.target.value })}
+                            className="w-full border rounded px-2 py-1 text-xs text-gray-500"
+                            placeholder="Descrição"
+                          />
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={editActivityForm.status}
+                              onChange={(e) => setEditActivityForm({ ...editActivityForm, status: e.target.value as any })}
+                              className="border rounded px-2 py-1 text-xs"
+                            >
+                              <option value="Em andamento">Em andamento</option>
+                              <option value="Concluído">Concluído</option>
+                              <option value="Urgente">Urgente</option>
+                              <option value="Agendado">Agendado</option>
+                            </select>
+                            <div className="flex gap-1 ml-auto">
+                              <button onClick={handleUpdateActivity} className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200"><Save size={14} /></button>
+                              <button onClick={cancelEditingActivity} className="p-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"><X size={14} /></button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-start">
+                            <h4 className="font-bold text-gray-800 text-sm">{activity.title}</h4>
+                            <div className="flex items-center gap-2">
+                              <ActivityBadge status={activity.status} />
+                              <div className="hidden group-hover:flex gap-1">
+                                <button
+                                  onClick={() => startEditingActivity(activity)}
+                                  className="text-blue-500 hover:text-blue-700 bg-white shadow-sm p-1 rounded-full border border-gray-100"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteActivity(activity.id)}
+                                  className="text-red-500 hover:text-red-700 bg-white shadow-sm p-1 rounded-full border border-gray-100"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-0.5">{activity.description}</p>
+                          <p className="text-xs text-gray-400 mt-2">{activity.time}</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))

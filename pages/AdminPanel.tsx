@@ -44,8 +44,9 @@ export default function AdminPanel() {
     useEffect(() => {
         if (!isAdmin) return;
 
+        console.log('🔄 Iniciando subscrição Realtime...');
         const channel = supabase
-            .channel('admin-users-changes')
+            .channel('public:user_profiles')
             .on(
                 'postgres_changes',
                 {
@@ -54,34 +55,50 @@ export default function AdminPanel() {
                     table: 'user_profiles'
                 },
                 (payload) => {
-                    console.log('🔄 Realtime update received:', payload);
+                    console.log('🔄 Atualização Realtime recebida:', payload);
                     setSyncStatus('syncing');
 
-                    // Handle different types of changes
-                    if (payload.eventType === 'INSERT') {
-                        setUsers(prev => [payload.new as UserProfile, ...prev]);
-                    } else if (payload.eventType === 'UPDATE') {
-                        setUsers(prev => prev.map(u =>
-                            u.id === payload.new.id ? payload.new as UserProfile : u
-                        ));
-                    } else if (payload.eventType === 'DELETE') {
-                        setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-                    }
+                    setUsers(currentUsers => {
+                        let updatedUsers = [...currentUsers];
+                        if (payload.eventType === 'INSERT') {
+                            // Check if already exists to avoid duplication
+                            if (!updatedUsers.some(u => u.id === payload.new.id)) {
+                                updatedUsers = [payload.new as UserProfile, ...updatedUsers];
+                            }
+                        } else if (payload.eventType === 'UPDATE') {
+                            updatedUsers = updatedUsers.map(u =>
+                                u.id === payload.new.id ? { ...u, ...payload.new } : u
+                            );
+                        } else if (payload.eventType === 'DELETE') {
+                            updatedUsers = updatedUsers.filter(u => u.id !== payload.old.id);
+                        }
+                        return updatedUsers;
+                    });
 
                     setLastSync(new Date());
-                    setTimeout(() => setSyncStatus('synced'), 500);
+                    setTimeout(() => setSyncStatus('synced'), 1000);
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('📡 Status da conexão Realtime:', status);
+                if (status === 'SUBSCRIBED') {
+                    setSyncStatus('synced');
+                } else if (status === 'CHANNEL_ERROR') {
+                    setSyncStatus('error');
+                }
+            });
 
         return () => {
+            console.log('🛑 Removendo canal Realtime');
             supabase.removeChannel(channel);
         };
     }, [isAdmin]);
 
     // Recalculate stats when users change
     useEffect(() => {
-        calculateStats(users);
+        if (users.length > 0) {
+            calculateStats(users);
+        }
     }, [users]);
 
     const checkAdminAccess = async () => {
@@ -91,7 +108,7 @@ export default function AdminPanel() {
             return;
         }
 
-        // Mock Admin Access for specific user
+        // Mock Admin Access for specific user (Development Bypass)
         if (user.email === 'wallisom_53@outlook.com') {
             setIsAdmin(true);
             loadUsers();
@@ -105,14 +122,15 @@ export default function AdminPanel() {
                 .eq('email', user.email)
                 .single();
 
-            if (error || !data) {
+            if (data) {
+                setIsAdmin(true);
+                loadUsers();
+            } else {
+                // Try RPC or other method if table check fails, or fallback
+                console.warn('Usuário não encontrado na tabela admin_users');
                 setIsAdmin(false);
                 setLoading(false);
-                return;
             }
-
-            setIsAdmin(true);
-            loadUsers();
         } catch (err) {
             console.error('Erro ao verificar acesso admin:', err);
             setIsAdmin(false);
@@ -131,6 +149,7 @@ export default function AdminPanel() {
 
             if (error) throw error;
 
+            console.log(`✅ ${data?.length} usuários carregados via Fetch.`);
             setUsers(data || []);
             setFilteredUsers(data || []);
             setLastSync(new Date());
@@ -151,7 +170,7 @@ export default function AdminPanel() {
             new Date(u.created_at) >= firstDayOfMonth
         ).length;
 
-        // Simple revenue calculation (you can adjust based on your pricing)
+        // Simple revenue calculation
         const planPrices = { free: 0, basic: 147, professional: 247, enterprise: 500 };
         const revenue = userList
             .filter(u => u.subscription_status === 'active')
@@ -173,7 +192,7 @@ export default function AdminPanel() {
 
         if (searchTerm) {
             filtered = filtered.filter(u =>
-                u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 u.farm_id?.toLowerCase().includes(searchTerm.toLowerCase())
             );
@@ -216,12 +235,17 @@ export default function AdminPanel() {
 
             if (error) throw error;
 
+            // Updated local state optimistically
+            setUsers(prev => prev.map(u =>
+                u.id === editingUser ? { ...u, ...editForm } as UserProfile : u
+            ));
+
             setEditingUser(null);
             setEditForm({});
-            showToast('✅ Usuário atualizado com sucesso!', 'success');
+            alert('✅ Usuário atualizado com sucesso!'); // Simple alert instead of toast for stability
         } catch (err: any) {
             console.error('❌ Erro ao atualizar usuário:', err);
-            showToast(`❌ Erro: ${err.message}`, 'error');
+            alert(`❌ Erro: ${err.message}`);
         } finally {
             setSaving(false);
         }
@@ -283,16 +307,22 @@ export default function AdminPanel() {
                 if (error) throw error;
             }
 
+            // Sync will handle update, but let's clear metrics
             clearSelection();
-            showToast(`✅ ${selectedUsers.size} usuários ${action === 'delete' ? 'deletados' : 'atualizados'}!`, 'success');
+            if (action === 'delete') {
+                setUsers(prev => prev.filter(u => !selectedUsers.has(u.id)));
+            } else {
+                const newStatus = action === 'activate' ? 'active' : 'suspended';
+                setUsers(prev => prev.map(u => selectedUsers.has(u.id) ? { ...u, subscription_status: newStatus } : u));
+            }
+            alert(`✅ Ação em massa completada com sucesso!`);
         } catch (err: any) {
-            showToast(`❌ Erro: ${err.message}`, 'error');
+            alert(`❌ Erro: ${err.message}`);
         } finally {
             setSaving(false);
         }
     };
 
-    // Export to CSV
     const exportToCSV = () => {
         const headers = ['Nome', 'Email', 'Farm ID', 'Plano', 'Status', 'Data de Criação'];
         const rows = filteredUsers.map(u => [
@@ -314,14 +344,6 @@ export default function AdminPanel() {
         link.href = URL.createObjectURL(blob);
         link.download = `usuarios_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
-
-        showToast('✅ Dados exportados com sucesso!', 'success');
-    };
-
-    // Toast notification system
-    const showToast = (message: string, type: 'success' | 'error') => {
-        // Simple alert for now - you can replace with a proper toast library
-        alert(message);
     };
 
     const getStatusBadge = (status: string) => {
@@ -395,11 +417,9 @@ export default function AdminPanel() {
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-800">Painel de Administração</h1>
-                                <p className="text-gray-600">Gerencie todos os usuários e assinaturas em tempo real</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            {/* Sync Status Indicator */}
                             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${syncStatus === 'synced' ? 'bg-green-50 text-green-700' :
                                 syncStatus === 'syncing' ? 'bg-blue-50 text-blue-700' :
                                     'bg-red-50 text-red-700'
@@ -423,15 +443,6 @@ export default function AdminPanel() {
                                 </span>
                             </button>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                        <Crown className="w-5 h-5 text-yellow-500" />
-                        <span className="text-sm text-gray-600">
-                            Logado como: <strong className="text-green-600">{user?.email}</strong>
-                        </span>
-                        <span className="text-xs text-gray-400 ml-4">
-                            Última atualização: {lastSync.toLocaleTimeString('pt-BR')}
-                        </span>
                     </div>
                 </div>
 

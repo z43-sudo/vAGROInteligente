@@ -1,147 +1,96 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import {
     Shield, Users, Search, Filter, Edit2, Save, X,
     CheckCircle, XCircle, Clock, AlertTriangle, Crown,
     TrendingUp, Calendar, Mail, Building2, RefreshCw,
-    Download, Trash2, Check, BarChart3, Activity,
-    UserPlus, DollarSign, Zap, Eye, ChevronDown
+    Download, Trash2, Check, Activity, UserPlus, DollarSign
 } from 'lucide-react';
-import { supabase } from '../services/supabaseClient';
-import { UserProfile } from '../types';
-import { useAuth } from '../contexts/AuthContext';
+
+// Tipagem correta baseada no banco de dados real
+interface UserProfile {
+    id: string; // ID da tabela (PK)
+    user_id: string; // ID do Auth (FK)
+    email: string;
+    full_name: string | null;
+    farm_id: string | null;
+    role: string | null;
+    subscription_plan: 'free' | 'basic' | 'professional' | 'enterprise';
+    subscription_status: 'active' | 'trial' | 'suspended' | 'inactive';
+    created_at: string;
+    updated_at?: string;
+}
 
 export default function AdminPanel() {
     const { user } = useAuth();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    // Estados de Filtro e Busca
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterPlan, setFilterPlan] = useState<string>('all');
-    const [editingUser, setEditingUser] = useState<string | null>(null);
+
+    // Estados de Edição
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
-    const [isAdmin, setIsAdmin] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-    const [showBulkActions, setShowBulkActions] = useState(false);
-    const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
-    const [lastSync, setLastSync] = useState<Date>(new Date());
+
+    // Estados de Seleção em Massa
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Estatísticas
     const [stats, setStats] = useState({
         total: 0,
         active: 0,
         trial: 0,
         suspended: 0,
-        newThisMonth: 0,
-        revenue: 0,
+        revenue: 0
     });
 
-    // Verificar se o usuário é admin
     useEffect(() => {
-        checkAdminAccess();
+        checkPermissionAndLoad();
     }, [user]);
 
-    // Setup Realtime Subscription
     useEffect(() => {
-        if (!isAdmin) return;
+        filterUsers();
+    }, [users, searchTerm, filterStatus, filterPlan]);
 
-        console.log('🔄 Iniciando subscrição Realtime...');
-        const channel = supabase
-            .channel('public:user_profiles')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'user_profiles'
-                },
-                (payload) => {
-                    console.log('🔄 Atualização Realtime recebida:', payload);
-                    setSyncStatus('syncing');
+    // 1. Verificação de Permissão e Carregamento Inicial
+    const checkPermissionAndLoad = async () => {
+        if (!user?.email) return;
 
-                    setUsers(currentUsers => {
-                        let updatedUsers = [...currentUsers];
-                        if (payload.eventType === 'INSERT') {
-                            // Check if already exists to avoid duplication
-                            if (!updatedUsers.some(u => u.id === payload.new.id)) {
-                                updatedUsers = [payload.new as UserProfile, ...updatedUsers];
-                            }
-                        } else if (payload.eventType === 'UPDATE') {
-                            updatedUsers = updatedUsers.map(u =>
-                                u.id === payload.new.id ? { ...u, ...payload.new } : u
-                            );
-                        } else if (payload.eventType === 'DELETE') {
-                            updatedUsers = updatedUsers.filter(u => u.id !== payload.old.id);
-                        }
-                        return updatedUsers;
-                    });
+        // Verificação Hardcoded para segurança extra no frontend
+        const isSuperAdmin = user.email.toLowerCase() === 'wallisom_53@outlook.com';
 
-                    setLastSync(new Date());
-                    setTimeout(() => setSyncStatus('synced'), 1000);
-                }
-            )
-            .subscribe((status) => {
-                console.log('📡 Status da conexão Realtime:', status);
-                if (status === 'SUBSCRIBED') {
-                    setSyncStatus('synced');
-                } else if (status === 'CHANNEL_ERROR') {
-                    setSyncStatus('error');
-                }
-            });
-
-        return () => {
-            console.log('🛑 Removendo canal Realtime');
-            supabase.removeChannel(channel);
-        };
-    }, [isAdmin]);
-
-    // Recalculate stats when users change
-    useEffect(() => {
-        if (users.length > 0) {
-            calculateStats(users);
-        }
-    }, [users]);
-
-    const checkAdminAccess = async () => {
-        if (!user?.email) {
-            setIsAdmin(false);
-            setLoading(false);
-            return;
-        }
-
-        // Mock Admin Access for specific user (Development Bypass)
-        if (user.email === 'wallisom_53@outlook.com') {
+        if (isSuperAdmin) {
             setIsAdmin(true);
             loadUsers();
-            return;
-        }
-
-        try {
-            const { data, error } = await supabase
+        } else {
+            // Verifica no banco se existe na tabela admin_users
+            const { data } = await supabase
                 .from('admin_users')
                 .select('*')
                 .eq('email', user.email)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 setIsAdmin(true);
                 loadUsers();
             } else {
-                // Try RPC or other method if table check fails, or fallback
-                console.warn('Usuário não encontrado na tabela admin_users');
-                setIsAdmin(false);
                 setLoading(false);
+                setIsAdmin(false);
             }
-        } catch (err) {
-            console.error('Erro ao verificar acesso admin:', err);
-            setIsAdmin(false);
-            setLoading(false);
         }
     };
 
+    // 2. Carregar Usuários do Banco
     const loadUsers = async () => {
+        setLoading(true);
         try {
-            setLoading(true);
-            setSyncStatus('syncing');
             const { data, error } = await supabase
                 .from('user_profiles')
                 .select('*')
@@ -149,77 +98,73 @@ export default function AdminPanel() {
 
             if (error) throw error;
 
-            console.log(`✅ ${data?.length} usuários carregados via Fetch.`);
-            setUsers(data || []);
-            setFilteredUsers(data || []);
-            setLastSync(new Date());
-            setSyncStatus('synced');
+            if (data) {
+                setUsers(data as UserProfile[]);
+                calculateStats(data as UserProfile[]);
+            }
         } catch (err) {
             console.error('Erro ao carregar usuários:', err);
-            setSyncStatus('error');
+            alert('Erro ao carregar lista de usuários check o console.');
         } finally {
             setLoading(false);
         }
     };
 
-    const calculateStats = (userList: UserProfile[]) => {
-        const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        const newThisMonth = userList.filter(u =>
-            new Date(u.created_at) >= firstDayOfMonth
-        ).length;
-
-        // Simple revenue calculation
+    // 3. Calcular Estatísticas
+    const calculateStats = (data: UserProfile[]) => {
         const planPrices = { free: 0, basic: 147, professional: 247, enterprise: 500 };
-        const revenue = userList
-            .filter(u => u.subscription_status === 'active')
-            .reduce((sum, u) => sum + (planPrices[u.subscription_plan as keyof typeof planPrices] || 0), 0);
 
         setStats({
-            total: userList.length,
-            active: userList.filter(u => u.subscription_status === 'active').length,
-            trial: userList.filter(u => u.subscription_status === 'trial').length,
-            suspended: userList.filter(u => u.subscription_status === 'suspended').length,
-            newThisMonth,
-            revenue,
+            total: data.length,
+            active: data.filter(u => u.subscription_status === 'active').length,
+            trial: data.filter(u => u.subscription_status === 'trial').length,
+            suspended: data.filter(u => u.subscription_status === 'suspended').length,
+            revenue: data.reduce((acc, curr) => {
+                if (curr.subscription_status === 'active') {
+                    return acc + (planPrices[curr.subscription_plan] || 0);
+                }
+                return acc;
+            }, 0)
         });
     };
 
-    // Filtrar usuários
-    useEffect(() => {
-        let filtered = users;
+    // 4. Filtragem Local
+    const filterUsers = () => {
+        let result = [...users];
 
         if (searchTerm) {
-            filtered = filtered.filter(u =>
-                u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                u.farm_id?.toLowerCase().includes(searchTerm.toLowerCase())
+            const term = searchTerm.toLowerCase();
+            result = result.filter(u =>
+                u.email?.toLowerCase().includes(term) ||
+                u.full_name?.toLowerCase().includes(term) ||
+                u.farm_id?.toLowerCase().includes(term)
             );
         }
 
         if (filterStatus !== 'all') {
-            filtered = filtered.filter(u => u.subscription_status === filterStatus);
+            result = result.filter(u => u.subscription_status === filterStatus);
         }
 
         if (filterPlan !== 'all') {
-            filtered = filtered.filter(u => u.subscription_plan === filterPlan);
+            result = result.filter(u => u.subscription_plan === filterPlan);
         }
 
-        setFilteredUsers(filtered);
-    }, [searchTerm, filterStatus, filterPlan, users]);
-
-    const handleEdit = (userId: string) => {
-        const userToEdit = users.find(u => u.id === userId);
-        if (userToEdit) {
-            setEditingUser(userId);
-            setEditForm(userToEdit);
-        }
+        setFilteredUsers(result);
     };
 
-    const handleSave = async () => {
-        if (!editingUser || !editForm) return;
+    // 5. Ações de Edição
+    const startEditing = (user: UserProfile) => {
+        setEditingId(user.id);
+        setEditForm({ ...user });
+    };
 
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditForm({});
+    };
+
+    const saveUser = async () => {
+        if (!editingId) return;
         setSaving(true);
         try {
             const { error } = await supabase
@@ -227,574 +172,304 @@ export default function AdminPanel() {
                 .update({
                     subscription_plan: editForm.subscription_plan,
                     subscription_status: editForm.subscription_status,
-                    subscription_start_date: editForm.subscription_start_date || new Date().toISOString(),
-                    subscription_end_date: editForm.subscription_end_date,
-                    updated_at: new Date().toISOString(),
+                    full_name: editForm.full_name,
+                    role: editForm.role,
+                    updated_at: new Date().toISOString()
                 })
-                .eq('id', editingUser);
+                .eq('id', editingId); // Usa o ID da tabela (PK)
 
             if (error) throw error;
 
-            // Updated local state optimistically
-            setUsers(prev => prev.map(u =>
-                u.id === editingUser ? { ...u, ...editForm } as UserProfile : u
-            ));
-
-            setEditingUser(null);
-            setEditForm({});
-            alert('✅ Usuário atualizado com sucesso!'); // Simple alert instead of toast for stability
+            // Atualiza localmente
+            setUsers(prev => prev.map(u => u.id === editingId ? { ...u, ...editForm } as UserProfile : u));
+            setEditingId(null);
+            alert('Usuário atualizado com sucesso!');
         } catch (err: any) {
-            console.error('❌ Erro ao atualizar usuário:', err);
-            alert(`❌ Erro: ${err.message}`);
+            console.error('Erro ao salvar:', err);
+            alert(`Erro ao salvar: ${err.message}`);
         } finally {
             setSaving(false);
         }
     };
 
-    const handleCancel = () => {
-        setEditingUser(null);
-        setEditForm({});
+    // 6. Ações em Massa
+    const toggleSelection = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
     };
 
-    // Bulk Actions
-    const toggleUserSelection = (userId: string) => {
-        const newSelection = new Set(selectedUsers);
-        if (newSelection.has(userId)) {
-            newSelection.delete(userId);
+    const toggleAll = () => {
+        if (selectedIds.size === filteredUsers.length) {
+            setSelectedIds(new Set());
         } else {
-            newSelection.add(userId);
+            setSelectedIds(new Set(filteredUsers.map(u => u.id)));
         }
-        setSelectedUsers(newSelection);
-        setShowBulkActions(newSelection.size > 0);
     };
 
-    const selectAllFiltered = () => {
-        const allIds = new Set(filteredUsers.map(u => u.id));
-        setSelectedUsers(allIds);
-        setShowBulkActions(allIds.size > 0);
-    };
-
-    const clearSelection = () => {
-        setSelectedUsers(new Set());
-        setShowBulkActions(false);
-    };
-
-    const handleBulkAction = async (action: 'activate' | 'suspend' | 'delete') => {
-        if (selectedUsers.size === 0) return;
-
-        const confirmMessage = action === 'delete'
-            ? `Tem certeza que deseja DELETAR ${selectedUsers.size} usuários? Esta ação não pode ser desfeita!`
-            : `Tem certeza que deseja ${action === 'activate' ? 'ativar' : 'suspender'} ${selectedUsers.size} usuários?`;
-
-        if (!confirm(confirmMessage)) return;
+    const deleteSelected = async () => {
+        if (!confirm(`Tem certeza que deseja deletar ${selectedIds.size} usuários?`)) return;
 
         setSaving(true);
         try {
-            const userIds = Array.from(selectedUsers);
+            const idsToDelete = Array.from(selectedIds);
+            const { error } = await supabase
+                .from('user_profiles')
+                .delete()
+                .in('id', idsToDelete);
 
-            if (action === 'delete') {
-                const { error } = await supabase
-                    .from('user_profiles')
-                    .delete()
-                    .in('id', userIds);
-                if (error) throw error;
-            } else {
-                const newStatus = action === 'activate' ? 'active' : 'suspended';
-                const { error } = await supabase
-                    .from('user_profiles')
-                    .update({ subscription_status: newStatus })
-                    .in('id', userIds);
-                if (error) throw error;
-            }
+            if (error) throw error;
 
-            // Sync will handle update, but let's clear metrics
-            clearSelection();
-            if (action === 'delete') {
-                setUsers(prev => prev.filter(u => !selectedUsers.has(u.id)));
-            } else {
-                const newStatus = action === 'activate' ? 'active' : 'suspended';
-                setUsers(prev => prev.map(u => selectedUsers.has(u.id) ? { ...u, subscription_status: newStatus } : u));
-            }
-            alert(`✅ Ação em massa completada com sucesso!`);
+            setUsers(prev => prev.filter(u => !selectedIds.has(u.id)));
+            setSelectedIds(new Set());
+            alert('Usuários removidos com sucesso.');
         } catch (err: any) {
-            alert(`❌ Erro: ${err.message}`);
+            alert(`Erro ao deletar: ${err.message}`);
         } finally {
             setSaving(false);
         }
     };
 
-    const exportToCSV = () => {
-        const headers = ['Nome', 'Email', 'Farm ID', 'Plano', 'Status', 'Data de Criação'];
-        const rows = filteredUsers.map(u => [
-            u.full_name || '',
-            u.email,
-            u.farm_id || '',
-            u.subscription_plan,
-            u.subscription_status,
-            new Date(u.created_at).toLocaleDateString('pt-BR')
-        ]);
-
-        const csvContent = [
-            headers.join(','),
-            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `usuarios_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
-    };
-
+    // RenderHelpers
     const getStatusBadge = (status: string) => {
-        const badges = {
-            active: { color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle, label: 'Ativo' },
-            trial: { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock, label: 'Trial' },
-            inactive: { color: 'bg-gray-100 text-gray-700 border-gray-200', icon: XCircle, label: 'Inativo' },
-            suspended: { color: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle, label: 'Suspenso' },
+        const styles = {
+            active: 'bg-green-100 text-green-700',
+            trial: 'bg-blue-100 text-blue-700',
+            suspended: 'bg-red-100 text-red-700',
+            inactive: 'bg-gray-100 text-gray-700'
         };
-        const badge = badges[status as keyof typeof badges] || badges.inactive;
-        const Icon = badge.icon;
-
+        const label = {
+            active: 'Ativo', trial: 'Trial', suspended: 'Suspenso', inactive: 'Inativo'
+        };
         return (
-            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${badge.color}`}>
-                <Icon size={12} />
-                {badge.label}
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${styles[status as keyof typeof styles] || styles.inactive}`}>
+                {label[status as keyof typeof label] || status}
             </span>
         );
     };
 
-    const getPlanBadge = (plan: string) => {
-        const badges = {
-            free: { color: 'bg-gray-100 text-gray-600', label: 'Gratuito' },
-            basic: { color: 'bg-blue-100 text-blue-600', label: 'Básico' },
-            professional: { color: 'bg-purple-100 text-purple-600', label: 'Profissional' },
-            enterprise: { color: 'bg-yellow-100 text-yellow-700', label: 'Enterprise' },
-        };
-        const badge = badges[plan as keyof typeof badges] || badges.free;
-
-        return (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
-                {badge.label}
-            </span>
-        );
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <RefreshCw className="w-12 h-12 text-green-600 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-600">Carregando painel...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!isAdmin) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-lg">
-                    <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Negado</h2>
-                    <p className="text-gray-600">
-                        Você não tem permissão para acessar o painel de administração.
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return <div className="p-8 text-center text-gray-500">Carregando painel admin...</div>;
+    if (!isAdmin) return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado.</div>;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-gray-50 p-6">
+            <div className="max-w-7xl mx-auto space-y-6">
+
                 {/* Header */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-green-600 to-emerald-600 p-3 rounded-xl text-white shadow-lg">
-                                <Shield size={28} />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-800">Painel de Administração</h1>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${syncStatus === 'synced' ? 'bg-green-50 text-green-700' :
-                                syncStatus === 'syncing' ? 'bg-blue-50 text-blue-700' :
-                                    'bg-red-50 text-red-700'
-                                }`}>
-                                <Activity size={16} className={syncStatus === 'syncing' ? 'animate-pulse' : ''} />
-                                <span className="text-xs font-medium">
-                                    {syncStatus === 'synced' ? 'Sincronizado' :
-                                        syncStatus === 'syncing' ? 'Sincronizando...' :
-                                            'Erro de sinc.'}
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => loadUsers()}
-                                disabled={loading}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                                    } text-white shadow-md`}
-                            >
-                                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                                <span className="text-sm font-medium">
-                                    {loading ? 'Carregando...' : 'Recarregar'}
-                                </span>
-                            </button>
-                        </div>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                            <Shield className="text-green-600" />
+                            Painel Administrativo
+                        </h1>
+                        <p className="text-gray-500">Gerenciamento total de usuários e assinaturas</p>
                     </div>
+                    <button onClick={loadUsers} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 shadow-sm">
+                        <RefreshCw size={18} /> Atualizar Lista
+                    </button>
                 </div>
 
-                {/* Enhanced Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Total</p>
-                                <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
-                            </div>
-                            <Users className="w-12 h-12 text-blue-500 opacity-20" />
-                        </div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-sm text-gray-500">Total Usuários</p>
+                        <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
                     </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Ativos</p>
-                                <p className="text-3xl font-bold text-green-600">{stats.active}</p>
-                            </div>
-                            <CheckCircle className="w-12 h-12 text-green-500 opacity-20" />
-                        </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-sm text-gray-500">Ativos</p>
+                        <p className="text-2xl font-bold text-green-600">{stats.active}</p>
                     </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Trial</p>
-                                <p className="text-3xl font-bold text-blue-600">{stats.trial}</p>
-                            </div>
-                            <Clock className="w-12 h-12 text-blue-500 opacity-20" />
-                        </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-sm text-gray-500">Em Trial</p>
+                        <p className="text-2xl font-bold text-blue-600">{stats.trial}</p>
                     </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Suspensos</p>
-                                <p className="text-3xl font-bold text-red-600">{stats.suspended}</p>
-                            </div>
-                            <AlertTriangle className="w-12 h-12 text-red-500 opacity-20" />
-                        </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-sm text-gray-500">Suspensos</p>
+                        <p className="text-2xl font-bold text-red-600">{stats.suspended}</p>
                     </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Novos/Mês</p>
-                                <p className="text-3xl font-bold text-purple-600">{stats.newThisMonth}</p>
-                            </div>
-                            <UserPlus className="w-12 h-12 text-purple-500 opacity-20" />
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Receita</p>
-                                <p className="text-2xl font-bold text-emerald-600">R$ {stats.revenue}</p>
-                            </div>
-                            <DollarSign className="w-12 h-12 text-emerald-500 opacity-20" />
-                        </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-sm text-gray-500">Receita Est.</p>
+                        <p className="text-2xl font-bold text-emerald-600">R$ {stats.revenue}</p>
                     </div>
                 </div>
-
-                {/* Bulk Actions Bar */}
-                {showBulkActions && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <Check className="w-5 h-5 text-blue-600" />
-                            <span className="text-sm font-medium text-blue-900">
-                                {selectedUsers.size} usuário(s) selecionado(s)
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => handleBulkAction('activate')}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                            >
-                                Ativar Selecionados
-                            </button>
-                            <button
-                                onClick={() => handleBulkAction('suspend')}
-                                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
-                            >
-                                Suspender Selecionados
-                            </button>
-                            <button
-                                onClick={() => handleBulkAction('delete')}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                            >
-                                Deletar Selecionados
-                            </button>
-                            <button
-                                onClick={clearSelection}
-                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 {/* Filters & Actions */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* Search */}
-                        <div className="relative md:col-span-2">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div className="flex-1 w-full flex gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Buscar por email, nome ou farm_id..."
+                                placeholder="Buscar nome, email..."
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                onChange={e => setSearchTerm(e.target.value)}
                             />
                         </div>
-
-                        {/* Status Filter */}
-                        <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none"
-                            >
-                                <option value="all">Todos os Status</option>
-                                <option value="active">Ativo</option>
-                                <option value="trial">Trial</option>
-                                <option value="inactive">Inativo</option>
-                                <option value="suspended">Suspenso</option>
-                            </select>
-                        </div>
-
-                        {/* Plan Filter */}
-                        <div className="relative">
-                            <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                            <select
-                                value={filterPlan}
-                                onChange={(e) => setFilterPlan(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none"
-                            >
-                                <option value="all">Todos os Planos</option>
-                                <option value="free">Gratuito</option>
-                                <option value="basic">Básico</option>
-                                <option value="professional">Profissional</option>
-                                <option value="enterprise">Enterprise</option>
-                            </select>
-                        </div>
+                        <select
+                            className="bg-white border border-gray-300 rounded-lg px-4 py-2"
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value)}
+                        >
+                            <option value="all">Status: Todos</option>
+                            <option value="active">Ativo</option>
+                            <option value="trial">Trial</option>
+                            <option value="suspended">Suspenso</option>
+                        </select>
+                        <select
+                            className="bg-white border border-gray-300 rounded-lg px-4 py-2"
+                            value={filterPlan}
+                            onChange={e => setFilterPlan(e.target.value)}
+                        >
+                            <option value="all">Plano: Todos</option>
+                            <option value="free">Gratuito</option>
+                            <option value="basic">Básico</option>
+                            <option value="professional">Profissional</option>
+                            <option value="enterprise">Enterprise</option>
+                        </select>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200">
+                    {selectedIds.size > 0 && (
                         <button
-                            onClick={selectAllFiltered}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                            onClick={deleteSelected}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                         >
-                            <Check size={16} />
-                            Selecionar Todos ({filteredUsers.length})
+                            <Trash2 size={18} /> Deletar ({selectedIds.size})
                         </button>
-                        <button
-                            onClick={exportToCSV}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                        >
-                            <Download size={16} />
-                            Exportar CSV
-                        </button>
-                    </div>
+                    )}
                 </div>
 
-                {/* Users Table */}
+                {/* Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-left">
+                                    <th className="px-6 py-4 w-10">
                                         <input
                                             type="checkbox"
-                                            checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
-                                            onChange={(e) => e.target.checked ? selectAllFiltered() : clearSelection()}
-                                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                            checked={filteredUsers.length > 0 && selectedIds.size === filteredUsers.length}
+                                            onChange={toggleAll}
+                                            className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                                         />
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Usuário
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Farm ID
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Plano
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Data de Criação
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Ações
-                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Usuário</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Farm ID / Role</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Plano</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredUsers.length === 0 ? (
+                                {filteredUsers.map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(u.id)}
+                                                onChange={() => toggleSelection(u.id)}
+                                                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                            />
+                                        </td>
+
+                                        {/* Modo Edição ou Visualização */}
+                                        {editingId === u.id ? (
+                                            <>
+                                                <td className="px-6 py-4">
+                                                    <input
+                                                        className="w-full border rounded px-2 py-1 mb-1 text-sm"
+                                                        value={editForm.full_name || ''}
+                                                        onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
+                                                        placeholder="Nome Completo"
+                                                    />
+                                                    <div className="text-xs text-gray-500">{u.email}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <input
+                                                        className="w-full border rounded px-2 py-1 text-sm"
+                                                        value={editForm.role || ''}
+                                                        onChange={e => setEditForm({ ...editForm, role: e.target.value })}
+                                                        placeholder="Role (ex: owner)"
+                                                    />
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <select
+                                                        className="border rounded px-2 py-1 text-sm w-full"
+                                                        value={editForm.subscription_plan}
+                                                        onChange={e => setEditForm({ ...editForm, subscription_plan: e.target.value as any })}
+                                                    >
+                                                        <option value="free">Gratuito</option>
+                                                        <option value="basic">Básico</option>
+                                                        <option value="professional">Profissional</option>
+                                                        <option value="enterprise">Enterprise</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <select
+                                                        className="border rounded px-2 py-1 text-sm w-full"
+                                                        value={editForm.subscription_status}
+                                                        onChange={e => setEditForm({ ...editForm, subscription_status: e.target.value as any })}
+                                                    >
+                                                        <option value="active">Ativo</option>
+                                                        <option value="trial">Trial</option>
+                                                        <option value="suspended">Suspenso</option>
+                                                        <option value="inactive">Inativo</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={saveUser} disabled={saving} className="p-2 bg-green-100 text-green-700 rounded hover:bg-green-200">
+                                                            <Save size={16} />
+                                                        </button>
+                                                        <button onClick={cancelEditing} className="p-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-medium text-gray-900">{u.full_name || 'Sem nome'}</div>
+                                                    <div className="text-sm text-gray-500">{u.email}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-sm text-gray-900 font-mono">{u.farm_id || '-'}</div>
+                                                    <div className="text-xs text-gray-500 capitalize">{u.role || 'member'}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="capitalize px-2 py-1 bg-gray-100 rounded text-xs text-gray-700 font-medium">
+                                                        {u.subscription_plan}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {getStatusBadge(u.subscription_status)}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        onClick={() => startEditing(u)}
+                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        title="Editar"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                </td>
+                                            </>
+                                        )}
+                                    </tr>
+                                ))}
+
+                                {filteredUsers.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                                            <p>Nenhum usuário encontrado</p>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                                            Nenhum usuário encontrado.
                                         </td>
                                     </tr>
-                                ) : (
-                                    filteredUsers.map((user) => (
-                                        <tr key={user.id} className={`hover:bg-gray-50 transition-colors ${selectedUsers.has(user.id) ? 'bg-blue-50' : ''
-                                            }`}>
-                                            <td className="px-6 py-4">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedUsers.has(user.id)}
-                                                    onChange={() => toggleUserSelection(user.id)}
-                                                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                                />
-                                            </td>
-                                            {editingUser === user.id ? (
-                                                <>
-                                                    {/* Modo de Edição */}
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="bg-green-100 p-2 rounded-full">
-                                                                <Mail className="w-5 h-5 text-green-600" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-medium text-gray-800">{user.full_name || 'Sem nome'}</p>
-                                                                <p className="text-sm text-gray-500">{user.email}</p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                            <Building2 size={16} />
-                                                            {user.farm_id}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <select
-                                                            value={editForm.subscription_plan}
-                                                            onChange={(e) => setEditForm({ ...editForm, subscription_plan: e.target.value as any })}
-                                                            className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
-                                                        >
-                                                            <option value="free">Gratuito</option>
-                                                            <option value="basic">Básico</option>
-                                                            <option value="professional">Profissional</option>
-                                                            <option value="enterprise">Enterprise</option>
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <select
-                                                            value={editForm.subscription_status}
-                                                            onChange={(e) => setEditForm({ ...editForm, subscription_status: e.target.value as any })}
-                                                            className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
-                                                        >
-                                                            <option value="active">Ativo</option>
-                                                            <option value="trial">Trial</option>
-                                                            <option value="inactive">Inativo</option>
-                                                            <option value="suspended">Suspenso</option>
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                            <Calendar size={16} />
-                                                            {new Date(user.created_at).toLocaleDateString('pt-BR')}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                onClick={handleSave}
-                                                                disabled={saving}
-                                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
-                                                                    } text-white`}
-                                                            >
-                                                                {saving ? (
-                                                                    <RefreshCw size={16} className="animate-spin" />
-                                                                ) : (
-                                                                    <Save size={16} />
-                                                                )}
-                                                            </button>
-                                                            <button
-                                                                onClick={handleCancel}
-                                                                className="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                                                            >
-                                                                <X size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {/* Modo de Visualização */}
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="bg-green-100 p-2 rounded-full">
-                                                                <Mail className="w-5 h-5 text-green-600" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-medium text-gray-800">{user.full_name || 'Sem nome'}</p>
-                                                                <p className="text-sm text-gray-500">{user.email}</p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                            <Building2 size={16} />
-                                                            <span className="font-mono text-xs">{user.farm_id}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {getPlanBadge(user.subscription_plan)}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {getStatusBadge(user.subscription_status)}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                            <Calendar size={16} />
-                                                            {new Date(user.created_at).toLocaleDateString('pt-BR')}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <button
-                                                            onClick={() => handleEdit(user.id)}
-                                                            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                    </td>
-                                                </>
-                                            )}
-                                        </tr>
-                                    ))
                                 )}
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                {/* Footer Info */}
-                <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>Mostrando {filteredUsers.length} de {users.length} usuários • Atualização em tempo real ativa</p>
                 </div>
             </div>
         </div>

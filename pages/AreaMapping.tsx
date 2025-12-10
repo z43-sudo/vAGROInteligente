@@ -60,6 +60,13 @@ const AreaMapping: React.FC = () => {
         localStorage.setItem(`mapped_areas_${currentUser.farm_id}`, JSON.stringify(updatedAreas));
     };
 
+    const clearAllAreas = () => {
+        if (window.confirm('Tem certeza que deseja excluir TODAS as áreas mapeadas? Esta ação não pode ser desfeita e também limpará o Gêmeo Digital.')) {
+            setAreas([]);
+            localStorage.removeItem(`mapped_areas_${currentUser.farm_id}`);
+        }
+    };
+
     const tabs = [
         { id: 'map' as const, name: 'Mapa Interativo', icon: Map },
         { id: 'drone' as const, name: 'Conectar Drone', icon: Drone },
@@ -70,8 +77,8 @@ const AreaMapping: React.FC = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-6">
             {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
+            <div className="mb-8 flex items-center justify-between">
+                <div className="flex items-center gap-3">
                     <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-3 rounded-2xl shadow-lg">
                         <Map className="text-white" size={32} />
                     </div>
@@ -80,6 +87,17 @@ const AreaMapping: React.FC = () => {
                         <p className="text-gray-600">Mapeie sua fazenda com precisão usando drones ou desenho manual</p>
                     </div>
                 </div>
+
+                {areas.length > 0 && (
+                    <button
+                        onClick={clearAllAreas}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors border border-red-200 shadow-sm"
+                        title="Excluir todas as áreas mapeadas"
+                    >
+                        <Trash2 size={20} />
+                        <span className="font-medium">Limpar Áreas</span>
+                    </button>
+                )}
             </div>
 
             {/* Stats Cards */}
@@ -146,8 +164,8 @@ const AreaMapping: React.FC = () => {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${isActive
-                                        ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                                        : 'text-gray-600 hover:bg-gray-100'
+                                    ? 'bg-blue-600 text-white shadow-lg transform scale-105'
+                                    : 'text-gray-600 hover:bg-gray-100'
                                     }`}
                             >
                                 <Icon size={20} />

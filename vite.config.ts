@@ -52,8 +52,7 @@ export default defineConfig(({ mode }) => {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
             'vendor-charts': ['recharts', 'lucide-react'],
-            'vendor-map': ['leaflet', 'react-leaflet', 'leaflet-draw'],
-            'vendor-utils': ['date-fns', 'jspdf', 'html2canvas']
+            'vendor-map': ['leaflet', 'react-leaflet', 'leaflet-draw']
           }
         }
       }

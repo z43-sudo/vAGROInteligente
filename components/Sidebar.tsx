@@ -67,6 +67,7 @@ const Sidebar: React.FC = () => {
     { name: 'Equipe', path: '/equipe', icon: Users },
     { name: 'Gestor', path: '/gestor', icon: BarChart3 },
     { name: 'Mapeamento de Área', path: '/mapeamento-area', icon: MapPin },
+    { name: 'Gêmeo Digital 3D', path: '/gemeo-digital', icon: Leaf },
     { name: 'IA Inteligente', path: '/ia-recomendacoes', icon: Brain },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
     { name: 'Notícias', path: '/noticias', icon: Newspaper },

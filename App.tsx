@@ -32,6 +32,7 @@ import AdminPanel from './pages/AdminPanel';
 import Partners from './pages/Partners';
 import IARecomendacoes from './pages/IARecomendacoes';
 import AreaMapping from './pages/AreaMapping';
+import DigitalTwin from './pages/DigitalTwin';
 
 function App() {
   return (
@@ -221,6 +222,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <AreaMapping />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/gemeo-digital" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DigitalTwin />
                 </Layout>
               </ProtectedRoute>
             } />

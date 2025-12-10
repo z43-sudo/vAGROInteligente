@@ -30,6 +30,7 @@ import Profile from './pages/Profile';
 import News from './pages/News';
 import AdminPanel from './pages/AdminPanel';
 import Partners from './pages/Partners';
+import IARecomendacoes from './pages/IARecomendacoes';
 
 function App() {
   return (
@@ -205,6 +206,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Partners />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/ia-recomendacoes" element={
+              <ProtectedRoute>
+                <Layout>
+                  <IARecomendacoes />
                 </Layout>
               </ProtectedRoute>
             } />

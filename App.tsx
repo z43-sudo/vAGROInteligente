@@ -31,6 +31,7 @@ import News from './pages/News';
 import AdminPanel from './pages/AdminPanel';
 import Partners from './pages/Partners';
 import IARecomendacoes from './pages/IARecomendacoes';
+import AreaMapping from './pages/AreaMapping';
 
 function App() {
   return (
@@ -213,6 +214,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <IARecomendacoes />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/mapeamento-area" element={
+              <ProtectedRoute>
+                <Layout>
+                  <AreaMapping />
                 </Layout>
               </ProtectedRoute>
             } />

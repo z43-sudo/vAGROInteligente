@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['logo.svg'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // Aumentar limite para 5MB
+        },
         manifest: {
           name: 'Agro Inteligente',
           short_name: 'AgroInteligente',
@@ -40,6 +43,21 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
+    build: {
+      chunkSizeWarningLimit: 2000, // Aumentar aviso de limite de chunk
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Dividir bibliotecas pesadas em chunks separados
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+            'vendor-charts': ['recharts', 'lucide-react'],
+            'vendor-map': ['leaflet', 'react-leaflet', 'leaflet-draw'],
+            'vendor-utils': ['date-fns', 'jspdf', 'html2canvas']
+          }
+        }
+      }
+    },
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

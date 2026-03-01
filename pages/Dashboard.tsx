@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sprout, TrendingUp, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon, Trash2, AlertCircle, Edit2, Save, X } from 'lucide-react';
+import { Sprout, TrendingUp, TrendingDown, Sparkles, Tractor, DollarSign, CloudSun, Droplets, Wind, Plus, FileText, Bug, Truck, ChevronRight, CheckCircle2, AlertTriangle, Clock, Calendar, MapPin as MapPinIcon, Trash2, AlertCircle, Edit2, Save, X } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import { Crop, Machine, Activity } from '../types';
 import { generateFarmInsight } from '../services/geminiService';
@@ -397,6 +397,72 @@ const Dashboard: React.FC = () => {
                 {geoError && <p className="text-xs text-red-400 mt-2">{geoError}</p>}
               </div>
             )}
+          </div>
+
+          {/* Cotações de Mercado */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden transition-all hover:shadow-md">
+            {/* Decoração de Fundo Simples */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full blur-3xl opacity-50 -mr-10 -mt-10"></div>
+
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-2">
+                <div className="bg-green-100 p-2 rounded-lg text-green-700">
+                  <TrendingUp size={20} />
+                </div>
+                <h3 className="font-bold text-gray-800">Mercado & Cotações</h3>
+              </div>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider bg-gray-100 px-2 py-1 rounded-full">Cepea/B3</span>
+            </div>
+
+            <div className="space-y-1 relative z-10 mb-4">
+              <div className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">Soja <span className="text-xs font-normal text-gray-500">(Sc 60kg)</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-800 text-sm">R$ 130,50</p>
+                  <p className="text-xs text-green-600 flex items-center justify-end font-bold"><TrendingUp size={12} className="mr-0.5" /> +1.2%</p>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">Boi Gordo <span className="text-xs font-normal text-gray-500">(@)</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-800 text-sm">R$ 235,00</p>
+                  <p className="text-xs text-green-600 flex items-center justify-end font-bold"><TrendingUp size={12} className="mr-0.5" /> +0.8%</p>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">Milho <span className="text-xs font-normal text-gray-500">(Sc 60kg)</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-800 text-sm">R$ 58,20</p>
+                  <p className="text-xs text-red-500 flex items-center justify-end font-bold"><TrendingDown size={12} className="mr-0.5" /> -0.5%</p>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Insight Market */}
+            <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-4 rounded-xl text-white shadow-md relative z-10">
+              <div className="flex items-start gap-3">
+                <div className="bg-white/20 p-2 rounded-lg shrink-0">
+                  <Sparkles size={16} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-green-100 mb-1 drop-shadow-sm">Recomendação da IA</p>
+                  <p className="text-sm font-medium leading-snug drop-shadow-sm">
+                    O dólar subiu e a <span className="font-bold">soja bateu R$ 130</span>. Seu custo de produção atual é de R$ 90/sc. Se vender agora, seu <span className="text-yellow-300 font-bold underline decoration-yellow-400 decoration-2 underline-offset-2">lucro será de 30%</span>!
+                  </p>
+                  <button className="mt-3 text-sm bg-white text-green-700 px-3 py-2 rounded-lg font-bold hover:bg-green-50 transition-colors w-full text-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform duration-200">
+                    Simular Cenário de Venda
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Quick Actions */}

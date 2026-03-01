@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Sprout, Calendar, Tractor, Beef,
-  Truck, Package, DollarSign, CloudRain, Users, Settings, Leaf, BarChart3, X, MessageSquare, LogOut, Newspaper, Shield, Award
+  Truck, Package, DollarSign, CloudRain, Users, Settings, Leaf, BarChart3, X, MessageSquare, LogOut, Newspaper, Shield, Award, Brain, MapPin
 } from 'lucide-react';
 import { NavigationItem } from '../types';
 import { useApp } from '../contexts/AppContext';
@@ -66,6 +66,9 @@ const Sidebar: React.FC = () => {
     { name: 'Clima', path: '/clima', icon: CloudRain },
     { name: 'Equipe', path: '/equipe', icon: Users },
     { name: 'Gestor', path: '/gestor', icon: BarChart3 },
+    { name: 'Mapeamento de Área', path: '/mapeamento-area', icon: MapPin },
+    { name: 'Gêmeo Digital 3D', path: '/gemeo-digital', icon: Leaf },
+    { name: 'IA Inteligente', path: '/ia-recomendacoes', icon: Brain },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
     { name: 'Notícias', path: '/noticias', icon: Newspaper },
     { name: 'Parceiros', path: '/parceiros', icon: Award },
